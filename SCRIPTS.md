@@ -2,7 +2,7 @@
 
 ## Overview
 
-Chronometry includes 6 shell scripts that control different aspects of the system. All scripts have comprehensive headers with detailed metadata and usage instructions, organized in matching start/stop pairs.
+Chronometry includes 7 shell scripts that control different aspects of the system. All scripts have comprehensive headers with detailed metadata and usage instructions, organized in matching start/stop pairs plus an automated service manager.
 
 ---
 
@@ -16,6 +16,7 @@ Chronometry includes 6 shell scripts that control different aspects of the syste
 | `stop_chronometry_webserver.sh` | Stop web server | One-shot | 8051 |
 | `start_chronometry_menubar.sh` | macOS menu bar app (all-in-one control) | Foreground | N/A |
 | `stop_chronometry_menubar.sh` | Stop menu bar app | One-shot | N/A |
+| **`manage_services.sh`** | **macOS service manager (boot + auto-restart)** | **Service Manager** | **N/A** |
 
 ---
 
@@ -502,6 +503,281 @@ Chronometry provides **6 streamlined shell scripts** with matching start/stop pa
 **Key Feature**: Digest generation is **fully integrated** - no separate scheduler needed!
 
 All scripts include comprehensive headers with metadata, usage instructions, and troubleshooting guidance.
+
+---
+
+## 🚀 Automatic Service Management (macOS)
+
+### manage_services.sh
+
+**Purpose**: Manage Chronometry services as persistent macOS launch agents that run at boot and auto-restart on crash
+
+**What it does**:
+1. Installs services to macOS `launchd` (runs at login)
+2. Configures auto-restart on crash
+3. Manages both web server and menu bar app
+4. Provides unified start/stop/status interface
+5. Maintains log files for monitoring
+
+**Services Managed**:
+- `com.chronometry.webserver` - Web dashboard (port 8051)
+- `com.chronometry.menubar` - Menu bar application
+
+**Installation Location**: `~/Library/LaunchAgents/`
+
+**Log Files**: `./logs/`
+- `webserver.log` / `webserver.error.log`
+- `menubar.log` / `menubar.error.log`
+
+---
+
+### Service Management Commands
+
+#### Install Services (Run at Boot)
+
+```bash
+./manage_services.sh install
+```
+
+**What happens**:
+1. Copies plist files to `~/Library/LaunchAgents/`
+2. Loads services into `launchd`
+3. Services start immediately
+4. Services will auto-start on login/boot
+5. Services auto-restart if they crash (10 second delay)
+
+**Output**:
+```
+================================================
+  Installing Chronometry Services
+================================================
+
+✓ Installed web server service
+✓ Installed menu bar service
+
+ℹ Loading services...
+✓ Services installed and started!
+ℹ Services will start automatically on boot
+ℹ Logs location: /Users/pkasinathan/workspace/chronometry/logs
+```
+
+---
+
+#### Start Services
+
+```bash
+./manage_services.sh start
+```
+
+Starts both services immediately (must be installed first).
+
+---
+
+#### Stop Services
+
+```bash
+./manage_services.sh stop
+```
+
+Stops both services (they will auto-restart if KeepAlive is enabled).
+
+---
+
+#### Restart Services
+
+```bash
+./manage_services.sh restart
+```
+
+Stops and starts both services with a 2 second delay between.
+
+---
+
+#### Check Service Status
+
+```bash
+./manage_services.sh status
+```
+
+**Output**:
+```
+================================================
+  Chronometry Services Status
+================================================
+
+✓ Web Server: Running
+PID = 12345
+LastExitStatus = 0
+
+✓ Menu Bar App: Running
+PID = 12346
+LastExitStatus = 0
+
+Dashboard: http://localhost:8051
+```
+
+---
+
+#### View Live Logs
+
+```bash
+./manage_services.sh logs
+```
+
+Tails both service log files in real-time. Press `Ctrl+C` to exit.
+
+---
+
+#### Uninstall Services
+
+```bash
+./manage_services.sh uninstall
+```
+
+**What happens**:
+1. Unloads services from `launchd`
+2. Removes plist files from `~/Library/LaunchAgents/`
+3. Services will NOT start on next boot
+4. Log files are preserved
+
+---
+
+### Service Configuration Files
+
+#### com.chronometry.webserver.plist
+
+**Key Features**:
+- `RunAtLoad: true` - Starts at login
+- `KeepAlive.Crashed: true` - Restarts if crashed
+- `ThrottleInterval: 10` - Wait 10 seconds before restart
+- Logs to `logs/webserver.log`
+
+#### com.chronometry.menubar.plist
+
+**Key Features**:
+- `RunAtLoad: true` - Starts at login
+- `KeepAlive.Crashed: true` - Restarts if crashed
+- `ProcessType: Interactive` - Required for GUI apps
+- `LimitLoadToSessionType: Aqua` - User session only
+- Logs to `logs/menubar.log`
+
+---
+
+### Workflow: Production Setup
+
+**Step 1: Initial Setup**
+```bash
+# Install dependencies
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Configure settings
+nano config.yaml
+```
+
+**Step 2: Install Services**
+```bash
+# Install and start services
+./manage_services.sh install
+
+# Verify they're running
+./manage_services.sh status
+```
+
+**Step 3: Verify Auto-Start**
+```bash
+# Log out and back in (or reboot)
+# Check services auto-started
+./manage_services.sh status
+```
+
+**Step 4: Monitor Logs**
+```bash
+# Check logs for errors
+./manage_services.sh logs
+
+# Or check individual logs
+tail -f logs/webserver.log
+tail -f logs/menubar.log
+```
+
+---
+
+### Advanced Service Management
+
+#### Manual launchd Commands
+
+```bash
+# Load service manually
+launchctl load ~/Library/LaunchAgents/com.chronometry.webserver.plist
+
+# Unload service manually
+launchctl unload ~/Library/LaunchAgents/com.chronometry.webserver.plist
+
+# Check if loaded
+launchctl list | grep chronometry
+
+# View service details
+launchctl list com.chronometry.webserver
+
+# Start service
+launchctl start com.chronometry.webserver
+
+# Stop service
+launchctl stop com.chronometry.webserver
+```
+
+#### Troubleshooting Services
+
+**Service won't start**:
+```bash
+# Check launchd errors
+log show --predicate 'process == "launchd"' --last 5m | grep chronometry
+
+# Check service status
+launchctl list com.chronometry.webserver
+
+# Check logs
+tail -50 logs/webserver.error.log
+```
+
+**Service keeps crashing**:
+```bash
+# Check error logs
+cat logs/webserver.error.log
+cat logs/menubar.error.log
+
+# Test manually
+source venv/bin/activate
+python web_server.py  # Should show errors
+```
+
+**Disable auto-restart**:
+```bash
+# Unload service (stops auto-restart)
+launchctl unload ~/Library/LaunchAgents/com.chronometry.webserver.plist
+
+# Or uninstall completely
+./manage_services.sh uninstall
+```
+
+---
+
+### Comparison: Manual vs Service Mode
+
+| Feature | Manual Scripts | Service Mode |
+|---------|---------------|--------------|
+| **Start Method** | `./start_*.sh` | Automatic at boot |
+| **Foreground/Background** | Foreground (terminal) | Background (daemon) |
+| **Auto-restart on crash** | ❌ No | ✅ Yes |
+| **Survives logout** | ❌ No | ✅ Yes |
+| **Terminal required** | ✅ Yes | ❌ No |
+| **Log files** | Terminal output | `logs/*.log` |
+| **Recommended for** | Development, testing | Production, daily use |
+
+**Recommendation**: 
+- **Development**: Use manual scripts for easy debugging
+- **Production**: Use service mode for reliability and convenience
 
 ---
 

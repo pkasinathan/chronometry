@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service identifier -->
+    <key>Label</key>
+    <string>com.chronometry.webserver</string>
+    
+    <!-- Program to run -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/pkasinathan/workspace/chronometry/venv/bin/python</string>
+        <string>/Users/pkasinathan/workspace/chronometry/web_server.py</string>
+    </array>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/pkasinathan/workspace/chronometry</string>
+    
+    <!-- Run at load (boot) -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep alive - restart if crashed -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    
+    <!-- Restart after 10 seconds if crashed -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <!-- Standard output log -->
+    <key>StandardOutPath</key>
+    <string>/Users/pkasinathan/workspace/chronometry/logs/webserver.log</string>
+    
+    <!-- Standard error log -->
+    <key>StandardErrorPath</key>
+    <string>/Users/pkasinathan/workspace/chronometry/logs/webserver.error.log</string>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    
+    <!-- Run as user (not root) -->
+    <key>UserName</key>
+    <string>pkasinathan</string>
+</dict>
+</plist>
+
