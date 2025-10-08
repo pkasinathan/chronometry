@@ -1,0 +1,91 @@
+# Base directory where all data is stored (screenshots and annotations)
+# capture.py saves to: {root_dir}/frames/YYYY-MM-DD/
+# annotate.py reads from same directory structure
+root_dir: "./data"
+
+# Capture settings - used by capture.py
+capture:
+  # Frames per second - used to calculate sleep interval between captures
+  # 0.00333333 = 1/300, so captures every 300 seconds
+  # Formula: sleep_interval = 1.0 / fps
+  fps: 0.00333333
+  
+  # Which monitor to capture from (0 = all monitors on macOS, 1+ = specific monitor)
+  # Used directly in mss.grab(monitors[monitor_index])
+  monitor_index: 1
+  
+  # Optional capture region [x, y, width, height] or null for full screen
+  # If set, overrides monitor bounds for custom area capture
+  region: null
+  
+  # Days to keep screenshots before auto-deletion
+  # cleanup_old_data() runs hourly and deletes folders older than this
+  retention_days: 3
+
+# Annotation settings - used by annotate.py
+annotation:
+  # Metatron API endpoint for image summarization
+  # Full URL used with metatron curl command (authentication handled automatically)
+  # NOTE: Port 7004 is required for Metatron proxy
+  api_url: "https://aiopsproxy.cluster.us-east-1.prod.cloud.netflix.net:7004/images/summarize"
+  
+  # Prompt sent with images to guide summarization
+  # Included in API request payload as "prompt" field
+  prompt: "Summarize the type of task or activity shown in these images using clear, work-related terms. For example: Sending a Slack message in the #membership-de channel about a new feature. Another example: Editing the file xyz in Cursor IDE."
+  
+  # Number of images to send per API request
+  # annotate.py processes PNGs in batches of this size
+  batch_size: 1
+  
+  # Command timeout in seconds
+  # Passed to subprocess.run(timeout=timeout_sec) for metatron curl
+  timeout_sec: 30
+  
+  # File extension for annotation files
+  # JSON files saved as {image_name}{json_suffix}
+  json_suffix: ".json"
+
+# Digest settings - integrated into main agent and menubar app
+digest:
+  # Enable automatic digest generation
+  # When true, digest generation runs periodically alongside annotation/timeline
+  enabled: true
+  
+  # Interval in seconds between digest generations
+  # Used by menubar_app.py and start_myworkanalyzer_agent.sh
+  # 3600 = 1 hour, 1800 = 30 minutes, 900 = 15 minutes, 7200 = 2 hours
+  interval_seconds: 3600
+
+# Visualization settings - used by timeline.py
+timeline:
+  # Time bucket size in minutes for grouping activities
+  # Activities within this time window are grouped together
+  bucket_minutes: 30
+  
+  # Minimum word count per bucket to be included
+  # Filters out buckets where combined summaries have fewer words
+  # Helps remove empty or minimal activity periods
+  min_tokens_per_bucket: 20
+  
+  # Title displayed on the HTML timeline page
+  title: "Chronometry Timeline"
+  
+  # Directory where timeline HTML files are saved
+  # Files saved as {output_dir}/timeline_YYYY-MM-DD.html
+  output_dir: "./output"
+  
+  # Only show buckets containing ANY of these keywords (case-insensitive)
+  # Empty list means no inclusion filter applied
+  include_keywords: []
+  
+  # Hide buckets containing ANY of these keywords (case-insensitive)
+  # Applied after include_keywords filter
+  exclude_keywords: []
+  
+  # Visual styling options for the timeline
+  style:
+    # Height of timeline chart in pixels
+    height: 900
+    
+    # Color theme: "light" uses plotly_white, "dark" uses plotly_dark
+    theme: "light"

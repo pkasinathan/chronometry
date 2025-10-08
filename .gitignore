@@ -1,0 +1,65 @@
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Data directories (contains screenshots and annotations)
+data/
+output/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+eggs/
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+.tmp/
+temp/
+
+# Config overrides (keep template)
+config.local.yaml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+
+# MyWorkAnalyzer specific
+*.png.json
+

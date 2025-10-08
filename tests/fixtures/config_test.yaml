@@ -1,0 +1,28 @@
+# Test configuration for MyWorkAnalyzer
+
+root_dir: "./test_data"
+
+capture:
+  fps: 0.1
+  monitor_index: 1
+  region: null
+  retention_days: 1
+
+annotation:
+  api_url: "https://test.example.com/api/summarize"
+  prompt: "Test prompt"
+  batch_size: 2
+  timeout_sec: 10
+  json_suffix: ".json"
+
+timeline:
+  bucket_minutes: 5
+  min_tokens_per_bucket: 5
+  title: "Test Timeline"
+  output_dir: "./test_output"
+  include_keywords: []
+  exclude_keywords: []
+  style:
+    height: 600
+    theme: "light"
+

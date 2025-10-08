@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronometry - Dashboard</title>
+    
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Socket.IO for real-time updates -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <!-- Vue.js for reactive UI -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.8/dist/vue.global.prod.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(180deg, #141414 0%, #0a0a0a 100%);
+            padding: 24px 40px;
+            border-bottom: 1px solid #222;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #E50914 0%, #b20710 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.4);
+        }
+        
+        .header-title h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 2px;
+        }
+        
+        .header-subtitle {
+            font-size: 13px;
+            color: #8c8c8c;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 8px 16px;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #8c8c8c;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-badge.live {
+            border-color: #E50914;
+            color: #E50914;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #E50914;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            color: #ffffff;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #E50914;
+            border-color: #E50914;
+            transform: translateY(-1px);
+        }
+        
+        .btn-primary {
+            background: #E50914;
+            border-color: #E50914;
+        }
+        
+        .btn-primary:hover {
+            background: #b20710;
+        }
+        
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 40px;
+        }
+        
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 32px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 0;
+        }
+        
+        .nav-tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: #8c8c8c;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .nav-tab:hover {
+            color: #ffffff;
+        }
+        
+        .nav-tab.active {
+            color: #E50914;
+            border-bottom-color: #E50914;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: #1a1a1a;
+            border: 1px solid #222;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            border-color: #E50914;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(229, 9, 20, 0.2);
+        }
+        
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #8c8c8c;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .stat-icon {
+            font-size: 24px;
+            opacity: 0.8;
+        }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #E50914;
+            margin-bottom: 8px;
+        }
+        
+        .stat-subtitle {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        /* Content Sections */
+        .section {
+            background: #1a1a1a;
+            border: 1px solid #222;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        
+        .section-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        /* Search Bar */
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: #0a0a0a;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 14px;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #E50914;
+        }
+        
+        .filter-select {
+            padding: 12px 16px;
+            background: #0a0a0a;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        /* Activity List */
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .activity-item {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            border-radius: 10px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .activity-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--activity-color, #E50914);
+            transition: width 0.2s;
+        }
+        
+        .activity-item:hover {
+            border-color: #333;
+            transform: translateX(4px);
+        }
+        
+        .activity-item:hover::before {
+            width: 6px;
+        }
+        
+        .activity-icon {
+            font-size: 24px;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e5e5e5;
+            margin-bottom: 4px;
+        }
+        
+        .activity-summary {
+            font-size: 13px;
+            color: #8c8c8c;
+            line-height: 1.5;
+        }
+        
+        .activity-time {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+            min-width: 80px;
+            text-align: right;
+        }
+        
+        /* Charts */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+        
+        /* Date Picker */
+        .date-picker {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .date-input {
+            padding: 10px 16px;
+            background: #0a0a0a;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 14px;
+        }
+        
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #222;
+            border-top-color: #E50914;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 20px;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-actions {
+                display: none;
+            }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #E50914;
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b20710;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        .modal-content {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #E50914;
+        }
+        
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: #8c8c8c;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: #2a2a2a;
+            color: #ffffff;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .modal-info {
+            margin-bottom: 20px;
+        }
+        
+        .modal-info-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        
+        .modal-info-label {
+            color: #8c8c8c;
+            min-width: 100px;
+        }
+        
+        .modal-info-value {
+            color: #ffffff;
+        }
+        
+        .modal-screenshot {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #222;
+        }
+        
+        .modal-frames {
+            margin-top: 20px;
+        }
+        
+        .modal-frames-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 12px;
+        }
+        
+        .frames-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+        }
+        
+        .frame-thumbnail {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #222;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .frame-thumbnail:hover {
+            border-color: #E50914;
+            transform: scale(1.05);
+        }
+        
+        /* Digest Styles */
+        .digest-container {
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+        
+        .digest-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 16px;
+            letter-spacing: -0.3px;
+        }
+        
+        .digest-overall {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        
+        .digest-overall-text {
+            font-size: 15px;
+            line-height: 1.8;
+            color: #e5e5e5;
+            margin: 0;
+        }
+        
+        .digest-categories {
+            background: #0a0a0a;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        
+        .digest-category-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .digest-category-card {
+            background: #141414;
+            border: 1px solid #2a2a2a;
+            border-left: 3px solid var(--category-color, #E50914);
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.2s ease;
+        }
+        
+        .digest-category-card:hover {
+            transform: translateX(4px);
+            border-color: var(--category-color, #E50914);
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.15);
+        }
+        
+        .digest-category-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .digest-category-icon {
+            font-size: 24px;
+        }
+        
+        .digest-category-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            flex-shrink: 0;
+        }
+        
+        .digest-category-stats {
+            font-size: 12px;
+            color: #8c8c8c;
+            margin-left: auto;
+        }
+        
+        .digest-category-summary {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #b3b3b3;
+            margin: 0;
+            padding-left: 36px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo">⏱️</div>
+                    <div class="header-title">
+                        <h1>Chronometry</h1>
+                        <div class="header-subtitle">[[ formattedSelectedDate ]]</div>
+                    </div>
+                </div>
+                
+                <div class="header-actions">
+                    <div class="status-badge" :class="{ live: isLive }">
+                        <span class="status-indicator" v-if="isLive"></span>
+                        [[ isLive ? 'Live' : 'Offline' ]]
+                    </div>
+                    <button class="btn" @click="refresh">🔄 Refresh</button>
+                    <button class="btn btn-primary" @click="exportData">📊 Export</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="container">
+            <!-- Navigation Tabs -->
+            <div class="nav-tabs">
+                <button class="nav-tab" :class="{ active: activeTab === 'dashboard' }" @click="activeTab = 'dashboard'">
+                    📊 Dashboard
+                </button>
+                <button class="nav-tab" :class="{ active: activeTab === 'timeline' }" @click="activeTab = 'timeline'">
+                    📅 Timeline
+                </button>
+                <button class="nav-tab" :class="{ active: activeTab === 'analytics' }" @click="activeTab = 'analytics'">
+                    📈 Analytics
+                </button>
+                <button class="nav-tab" :class="{ active: activeTab === 'search' }" @click="activeTab = 'search'">
+                    🔍 Search
+                </button>
+                <button class="nav-tab" :class="{ active: activeTab === 'settings' }" @click="activeTab = 'settings'">
+                    ⚙️ Settings
+                </button>
+            </div>
+            
+            <!-- Dashboard Tab -->
+            <div v-show="activeTab === 'dashboard'">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-label">Total Days</div>
+                            <div class="stat-icon">📅</div>
+                        </div>
+                        <div class="stat-value">[[ stats.total_days ]]</div>
+                        <div class="stat-subtitle">Days tracked</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-label">Total Frames</div>
+                            <div class="stat-icon">📸</div>
+                        </div>
+                        <div class="stat-value">[[ stats.total_frames ]]</div>
+                        <div class="stat-subtitle">Screenshots captured</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-label">Activities</div>
+                            <div class="stat-icon">💼</div>
+                        </div>
+                        <div class="stat-value">[[ stats.total_activities ]]</div>
+                        <div class="stat-subtitle">Total activities tracked</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-label">Focus Score</div>
+                            <div class="stat-icon">🎯</div>
+                        </div>
+                        <div class="stat-value">[[ stats.average_focus ]]%</div>
+                        <div class="stat-subtitle">Average focus percentage</div>
+                    </div>
+                </div>
+                
+                <!-- Today's Digest -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">📋 Today's Digest</h2>
+                        <div class="section-actions">
+                            <button class="btn" @click="regenerateDigest" title="Regenerate digest">🔄 Regenerate</button>
+                            <button class="btn" @click="activeTab = 'timeline'">View Details</button>
+                        </div>
+                    </div>
+                    
+                    <div class="loading" v-if="loadingDigest">
+                        <div class="loading-spinner"></div>
+                        <div>Generating digest...</div>
+                    </div>
+                    
+                    <div class="digest-container" v-else-if="digest && !digest.error">
+                        <!-- Overall Summary -->
+                        <div class="digest-overall">
+                            <h3 class="digest-section-title">Summary</h3>
+                            <p class="digest-overall-text">[[ digest.overall_summary ]]</p>
+                        </div>
+                        
+                        <!-- Category Summaries -->
+                        <div class="digest-categories">
+                            <h3 class="digest-section-title">Activity Breakdown</h3>
+                            <div class="digest-category-list">
+                                <div v-for="(data, category) in digest.category_summaries" 
+                                     :key="category"
+                                     class="digest-category-card"
+                                     :style="{ '--category-color': data.color }">
+                                    <div class="digest-category-header">
+                                        <span class="digest-category-icon">[[ data.icon ]]</span>
+                                        <span class="digest-category-name">[[ category ]]</span>
+                                        <span class="digest-category-stats">
+                                            [[ data.count ]] activities · [[ formatDuration(data.duration_minutes) ]]
+                                        </span>
+                                    </div>
+                                    <p class="digest-category-summary">[[ data.summary ]]</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="empty-state" v-else>
+                        <div class="empty-state-icon">📭</div>
+                        <div>[[ digest?.error || 'No activities recorded yet today' ]]</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline Tab -->
+            <div v-show="activeTab === 'timeline'">
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Activity Timeline</h2>
+                        <div class="date-picker">
+                            <input type="date" v-model="selectedDate" @change="loadTimelineByDate" class="date-input">
+                            <button class="btn" @click="previousDay">‹ Prev</button>
+                            <button class="btn" @click="nextDay">Next ›</button>
+                        </div>
+                    </div>
+                    
+                    <div class="loading" v-if="loadingTimeline">
+                        <div class="loading-spinner"></div>
+                        <div>Loading timeline...</div>
+                    </div>
+                    
+                    <div v-else-if="timelineActivities.length > 0">
+                        <div class="activity-list">
+                            <div v-for="activity in timelineActivities" :key="activity.start_time"
+                                 class="activity-item"
+                                 :style="{ '--activity-color': activity.color }"
+                                 @click="openActivityModal(activity)">
+                                <div class="activity-icon">[[ activity.icon ]]</div>
+                                <div class="activity-content">
+                                    <div class="activity-title">[[ activity.category ]]</div>
+                                    <div class="activity-summary">[[ activity.summary ]]</div>
+                                </div>
+                                <div class="activity-time">[[ formatTime(activity.start_time) ]] - [[ formatDuration(activity.duration_minutes) ]]</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="empty-state" v-else>
+                        <div class="empty-state-icon">📅</div>
+                        <div>No activities found for this date</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analytics Tab -->
+            <div v-show="activeTab === 'analytics'">
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Productivity Analytics</h2>
+                        <select v-model="analyticsDays" @change="loadAnalytics" class="filter-select">
+                            <option value="7">Last 7 days</option>
+                            <option value="14">Last 14 days</option>
+                            <option value="30">Last 30 days</option>
+                        </select>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <canvas id="focusChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title">Category Breakdown</h2>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title">Hourly Activity Pattern</h2>
+                    <div class="chart-container">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Search Tab -->
+            <div v-show="activeTab === 'search'">
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Search Activities</h2>
+                    </div>
+                    
+                    <div class="search-bar">
+                        <input type="text" v-model="searchQuery" @input="debounceSearch" 
+                               class="search-input" placeholder="Search activities...">
+                        <select v-model="searchCategory" @change="performSearch" class="filter-select">
+                            <option value="">All Categories</option>
+                            <option value="code">Code</option>
+                            <option value="meeting">Meeting</option>
+                            <option value="documentation">Documentation</option>
+                            <option value="email">Email</option>
+                            <option value="browsing">Browsing</option>
+                        </select>
+                        <button class="btn btn-primary" @click="performSearch">Search</button>
+                    </div>
+                    
+                    <div class="loading" v-if="searchLoading">
+                        <div class="loading-spinner"></div>
+                        <div>Searching...</div>
+                    </div>
+                    
+                    <div v-else-if="searchResults.length > 0">
+                        <div style="margin-bottom: 16px; color: #8c8c8c;">
+                            Found [[ searchResults.length ]] result(s)
+                        </div>
+                        <div class="activity-list">
+                            <div v-for="result in searchResults" :key="result.start_time"
+                                 class="activity-item"
+                                 :style="{ '--activity-color': result.color }"
+                                 @click="openActivityModal(result)">
+                                <div class="activity-icon">[[ result.icon ]]</div>
+                                <div class="activity-content">
+                                    <div class="activity-title">[[ result.category ]] - [[ result.date ]]</div>
+                                    <div class="activity-summary">[[ result.summary ]]</div>
+                                </div>
+                                <div class="activity-time">[[ formatDuration(result.duration_minutes) ]]</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="empty-state" v-else-if="searchQuery">
+                        <div class="empty-state-icon">🔍</div>
+                        <div>No results found for "[[ searchQuery ]]"</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings Tab -->
+            <div v-show="activeTab === 'settings'">
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Configuration Settings</h2>
+                        <button class="btn btn-primary" @click="saveSettings">💾 Save Changes</button>
+                    </div>
+                    
+                    <div style="display: grid; gap: 24px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Capture FPS</label>
+                            <input type="number" v-model.number="settings.capture.fps" step="0.001" 
+                                   class="search-input" style="max-width: 300px;">
+                            <div style="margin-top: 4px; font-size: 12px; color: #666;">
+                                Current: 1 frame every [[ Math.round(1 / settings.capture.fps) ]] seconds
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Monitor Index</label>
+                            <input type="number" v-model.number="settings.capture.monitor_index" 
+                                   class="search-input" style="max-width: 300px;">
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Retention Days</label>
+                            <input type="number" v-model.number="settings.capture.retention_days" 
+                                   class="search-input" style="max-width: 300px;">
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Annotation Batch Size</label>
+                            <input type="number" v-model.number="settings.annotation.batch_size" 
+                                   class="search-input" style="max-width: 300px;">
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Timeline Bucket Minutes</label>
+                            <input type="number" v-model.number="settings.timeline.bucket_minutes" 
+                                   class="search-input" style="max-width: 300px;">
+                        </div>
+                        
+                        <h3 style="margin-top: 32px; margin-bottom: 16px; font-size: 16px; color: #ffffff;">Digest Settings</h3>
+                        
+                        <div>
+                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                <input type="checkbox" v-model="settings.digest.enabled" style="width: 20px; height: 20px;">
+                                <span style="color: #e5e5e5; font-size: 14px;">Enable Automatic Digest Generation</span>
+                            </label>
+                            <div style="margin-top: 4px; margin-left: 32px; font-size: 12px; color: #666;">
+                                When enabled, digest_scheduler.py automatically generates daily summaries
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Generation Interval (seconds)</label>
+                            <input type="number" v-model.number="settings.digest.interval_seconds" 
+                                   class="search-input" style="max-width: 300px;">
+                            <div style="margin-top: 4px; font-size: 12px; color: #666;">
+                                Current: Generate every [[ Math.round(settings.digest.interval_seconds / 60) ]] minutes
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                <input type="checkbox" v-model="settings.digest.auto_regenerate" style="width: 20px; height: 20px;">
+                                <span style="color: #e5e5e5; font-size: 14px;">Auto-regenerate on New Activity</span>
+                            </label>
+                            <div style="margin-top: 4px; margin-left: 32px; font-size: 12px; color: #666;">
+                                Automatically regenerate digest when new frames are detected
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Available Dates</h2>
+                    </div>
+                    
+                    <div class="activity-list">
+                        <div v-for="dateInfo in availableDates" :key="dateInfo.date"
+                             class="activity-item" @click="viewDate(dateInfo.date)">
+                            <div class="activity-icon">📅</div>
+                            <div class="activity-content">
+                                <div class="activity-title">[[ dateInfo.date ]]</div>
+                                <div class="activity-summary">[[ dateInfo.frame_count ]] frames captured</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Activity Detail Modal -->
+        <div v-if="selectedActivity" class="modal-overlay" @click.self="closeModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <div class="modal-title">[[ selectedActivity.icon ]] [[ selectedActivity.category ]]</div>
+                        <div style="color: #8c8c8c; font-size: 13px; margin-top: 4px;">
+                            [[ formatTime(selectedActivity.start_time) ]] - [[ formatDuration(selectedActivity.duration_minutes) ]]
+                        </div>
+                    </div>
+                    <button class="modal-close" @click="closeModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-info">
+                        <div class="modal-info-row">
+                            <div class="modal-info-label">Category:</div>
+                            <div class="modal-info-value">[[ selectedActivity.category ]]</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-info-label">Date:</div>
+                            <div class="modal-info-value">[[ selectedActivity.date || selectedDate ]]</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-info-label">Duration:</div>
+                            <div class="modal-info-value">[[ formatDuration(selectedActivity.duration_minutes) ]]</div>
+                        </div>
+                        <div class="modal-info-row">
+                            <div class="modal-info-label">Summary:</div>
+                            <div class="modal-info-value">[[ selectedActivity.summary ]]</div>
+                        </div>
+                    </div>
+                    
+                    <div v-if="activityFrames.length > 0" class="modal-frames">
+                        <div class="modal-frames-title">Screenshots ([[ activityFrames.length ]] frames)</div>
+                        <div class="frames-grid">
+                            <img v-for="frame in activityFrames" :key="frame.timestamp"
+                                 :src="getFrameImageUrl(frame)"
+                                 :alt="frame.timestamp"
+                                 class="frame-thumbnail"
+                                 @click="viewFrameFullSize(frame)">
+                        </div>
+                    </div>
+                    
+                    <div v-else-if="loadingFrames" style="text-align: center; padding: 40px; color: #666;">
+                        <div class="loading-spinner" style="margin: 0 auto 16px;"></div>
+                        <div>Loading screenshots...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const { createApp } = Vue;
+        
+        createApp({
+            delimiters: ['[[', ']]'],
+            data() {
+                return {
+                    activeTab: 'dashboard',
+                    isLive: false,
+                    loading: false,
+                    loadingTimeline: false,
+                    searchLoading: false,
+                    currentDate: new Date().toLocaleDateString('en-US', { 
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                    }),
+                    selectedDate: (() => {
+                        const now = new Date();
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const day = String(now.getDate()).padStart(2, '0');
+                        return `${year}-${month}-${day}`;
+                    })(),
+                    analyticsDays: 7,
+                    stats: {
+                        total_days: 0,
+                        total_frames: 0,
+                        total_activities: 0,
+                        average_focus: 0
+                    },
+                    todayActivities: [],
+                    timelineActivities: [],
+                    digest: null,
+                    loadingDigest: false,
+                    searchQuery: '',
+                    searchCategory: '',
+                    searchResults: [],
+                    settings: {
+                        capture: {
+                            fps: 0.00333333,
+                            monitor_index: 1,
+                            retention_days: 3
+                        },
+                        annotation: {
+                            batch_size: 1
+                        },
+                        timeline: {
+                            bucket_minutes: 30
+                        },
+                        digest: {
+                            enabled: true,
+                            interval_seconds: 3600,
+                            active_hours: null,
+                            auto_regenerate: true
+                        }
+                    },
+                    availableDates: [],
+                    socket: null,
+                    focusChart: null,
+                    categoryChart: null,
+                    hourlyChart: null,
+                    searchTimeout: null,
+                    selectedActivity: null,
+                    activityFrames: [],
+                    loadingFrames: false
+                };
+            },
+            mounted() {
+                this.init();
+                // Auto-refresh every 60 seconds
+                setInterval(() => {
+                    this.refresh();
+                }, 60000);
+            },
+            methods: {
+                async init() {
+                    await this.loadStats();
+                    await this.loadAvailableDates();
+                    await this.loadDigest();
+                    await this.loadSettings();
+                    this.initWebSocket();
+                },
+                
+                initWebSocket() {
+                    this.socket = io();
+                    
+                    this.socket.on('connect', () => {
+                        console.log('Connected to server');
+                        this.isLive = true;
+                    });
+                    
+                    this.socket.on('disconnect', () => {
+                        console.log('Disconnected from server');
+                        this.isLive = false;
+                    });
+                    
+                    this.socket.on('new_activity', (data) => {
+                        console.log('New activity:', data);
+                        this.refresh();
+                    });
+                },
+                
+                async loadStats() {
+                    try {
+                        const response = await fetch('/api/stats');
+                        const data = await response.json();
+                        this.stats = data;
+                    } catch (error) {
+                        console.error('Error loading stats:', error);
+                    }
+                },
+                
+                async loadDigest(forceRegenerate = false) {
+                    this.loadingDigest = true;
+                    try {
+                        const url = forceRegenerate 
+                            ? `/api/digest?force=true`
+                            : '/api/digest';
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        this.digest = data;
+                    } catch (error) {
+                        console.error('Error loading digest:', error);
+                        this.digest = {
+                            error: 'Failed to load digest'
+                        };
+                    } finally {
+                        this.loadingDigest = false;
+                    }
+                },
+                
+                async regenerateDigest() {
+                    await this.loadDigest(true);
+                },
+                
+                async loadTodayTimeline() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch(`/api/timeline/${this.selectedDate}`);
+                        const data = await response.json();
+                        this.todayActivities = data.activities || [];
+                        
+                        // If no activities for today and we have available dates, default to the latest
+                        if (this.todayActivities.length === 0 && this.availableDates.length > 0) {
+                            const latestDate = this.availableDates[0].date;
+                            if (latestDate !== this.selectedDate) {
+                                this.selectedDate = latestDate;
+                                const latestResponse = await fetch(`/api/timeline/${latestDate}`);
+                                const latestData = await latestResponse.json();
+                                this.todayActivities = latestData.activities || [];
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading timeline:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                async loadTimelineByDate() {
+                    this.loadingTimeline = true;
+                    try {
+                        const response = await fetch(`/api/timeline/${this.selectedDate}`);
+                        const data = await response.json();
+                        this.timelineActivities = data.activities || [];
+                    } catch (error) {
+                        console.error('Error loading timeline:', error);
+                    } finally {
+                        this.loadingTimeline = false;
+                    }
+                },
+                
+                async loadAnalytics() {
+                    try {
+                        const response = await fetch(`/api/analytics?days=${this.analyticsDays}`);
+                        const data = await response.json();
+                        
+                        this.renderFocusChart(data.daily_stats);
+                        this.renderCategoryChart(data.category_breakdown);
+                        this.renderHourlyChart(data.hourly_breakdown);
+                    } catch (error) {
+                        console.error('Error loading analytics:', error);
+                    }
+                },
+                
+                renderFocusChart(dailyStats) {
+                    const ctx = document.getElementById('focusChart');
+                    if (!ctx) return;
+                    
+                    if (this.focusChart) {
+                        this.focusChart.destroy();
+                    }
+                    
+                    this.focusChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: dailyStats.map(d => d.date),
+                            datasets: [{
+                                label: 'Focus %',
+                                data: dailyStats.map(d => d.focus_percentage),
+                                borderColor: '#E50914',
+                                backgroundColor: 'rgba(229, 9, 20, 0.1)',
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    grid: { color: '#222' },
+                                    ticks: { color: '#8c8c8c' }
+                                },
+                                x: {
+                                    grid: { color: '#222' },
+                                    ticks: { color: '#8c8c8c' }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: '#ffffff' } }
+                            }
+                        }
+                    });
+                },
+                
+                renderCategoryChart(categoryBreakdown) {
+                    const ctx = document.getElementById('categoryChart');
+                    if (!ctx) return;
+                    
+                    if (this.categoryChart) {
+                        this.categoryChart.destroy();
+                    }
+                    
+                    this.categoryChart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: categoryBreakdown.map(c => c.category),
+                            datasets: [{
+                                data: categoryBreakdown.map(c => c.minutes),
+                                backgroundColor: [
+                                    '#E50914', '#c41111', '#b81010', 
+                                    '#8a8a8a', '#757575', '#666666'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { 
+                                    position: 'right',
+                                    labels: { color: '#ffffff' }
+                                }
+                            }
+                        }
+                    });
+                },
+                
+                renderHourlyChart(hourlyBreakdown) {
+                    const ctx = document.getElementById('hourlyChart');
+                    if (!ctx) return;
+                    
+                    if (this.hourlyChart) {
+                        this.hourlyChart.destroy();
+                    }
+                    
+                    this.hourlyChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: hourlyBreakdown.map(h => `${h.hour}:00`),
+                            datasets: [{
+                                label: 'Minutes',
+                                data: hourlyBreakdown.map(h => h.minutes),
+                                backgroundColor: '#E50914'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: { color: '#222' },
+                                    ticks: { color: '#8c8c8c' }
+                                },
+                                x: {
+                                    grid: { color: '#222' },
+                                    ticks: { color: '#8c8c8c' }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: '#ffffff' } }
+                            }
+                        }
+                    });
+                },
+                
+                async performSearch() {
+                    this.searchLoading = true;
+                    try {
+                        const params = new URLSearchParams({
+                            q: this.searchQuery,
+                            category: this.searchCategory,
+                            days: 30
+                        });
+                        
+                        const response = await fetch(`/api/search?${params}`);
+                        const data = await response.json();
+                        this.searchResults = data.results || [];
+                    } catch (error) {
+                        console.error('Error searching:', error);
+                    } finally {
+                        this.searchLoading = false;
+                    }
+                },
+                
+                debounceSearch() {
+                    clearTimeout(this.searchTimeout);
+                    this.searchTimeout = setTimeout(() => {
+                        if (this.searchQuery.length >= 3) {
+                            this.performSearch();
+                        }
+                    }, 500);
+                },
+                
+                async loadSettings() {
+                    try {
+                        const response = await fetch('/api/config');
+                        const data = await response.json();
+                        this.settings = data;
+                    } catch (error) {
+                        console.error('Error loading settings:', error);
+                    }
+                },
+                
+                async saveSettings() {
+                    try {
+                        const response = await fetch('/api/config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.settings)
+                        });
+                        
+                        if (response.ok) {
+                            alert('Settings saved successfully!');
+                        } else {
+                            alert('Failed to save settings');
+                        }
+                    } catch (error) {
+                        console.error('Error saving settings:', error);
+                        alert('Error saving settings');
+                    }
+                },
+                
+                async loadAvailableDates() {
+                    try {
+                        const response = await fetch('/api/dates');
+                        const data = await response.json();
+                        this.availableDates = data.dates || [];
+                    } catch (error) {
+                        console.error('Error loading dates:', error);
+                    }
+                },
+                
+                async exportData() {
+                    const date = this.selectedDate;
+                    window.open(`/api/export/csv?date=${date}`, '_blank');
+                },
+                
+                previousDay() {
+                    const date = new Date(this.selectedDate);
+                    date.setDate(date.getDate() - 1);
+                    this.selectedDate = date.toISOString().split('T')[0];
+                    this.loadTimelineByDate();
+                },
+                
+                nextDay() {
+                    const date = new Date(this.selectedDate);
+                    date.setDate(date.getDate() + 1);
+                    this.selectedDate = date.toISOString().split('T')[0];
+                    this.loadTimelineByDate();
+                },
+                
+                viewDate(date) {
+                    this.selectedDate = date;
+                    this.activeTab = 'timeline';
+                    this.loadTimelineByDate();
+                },
+                
+                async refresh() {
+                    await this.loadStats();
+                    await this.loadDigest();
+                    if (this.activeTab === 'analytics') {
+                        await this.loadAnalytics();
+                    }
+                },
+                
+                formatDuration(minutes) {
+                    if (minutes < 60) {
+                        return `${minutes}m`;
+                    }
+                    const hours = Math.floor(minutes / 60);
+                    const mins = minutes % 60;
+                    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+                },
+                
+                formatTime(isoString) {
+                    const date = new Date(isoString);
+                    return date.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                },
+                
+                async openActivityModal(activity) {
+                    this.selectedActivity = activity;
+                    this.activityFrames = [];
+                    this.loadingFrames = true;
+                    
+                    try {
+                        // Load frames for this activity
+                        const date = activity.date || this.selectedDate;
+                        const response = await fetch(`/api/frames?date=${date}`);
+                        const data = await response.json();
+                        
+                        // Filter frames within activity time range
+                        const startTime = new Date(activity.start_time);
+                        const endTime = new Date(activity.end_time);
+                        
+                        this.activityFrames = data.frames.filter(frame => {
+                            const frameTime = new Date(frame.datetime);
+                            return frameTime >= startTime && frameTime <= endTime;
+                        });
+                    } catch (error) {
+                        console.error('Error loading frames:', error);
+                    } finally {
+                        this.loadingFrames = false;
+                    }
+                },
+                
+                closeModal() {
+                    this.selectedActivity = null;
+                    this.activityFrames = [];
+                },
+                
+                getFrameImageUrl(frame) {
+                    const date = this.selectedActivity.date || this.selectedDate;
+                    return `/api/frames/${date}/${frame.timestamp}/image`;
+                },
+                
+                viewFrameFullSize(frame) {
+                    const url = this.getFrameImageUrl(frame);
+                    window.open(url, '_blank');
+                }
+            },
+            computed: {
+                formattedSelectedDate() {
+                    if (!this.selectedDate) return '';
+                    const date = new Date(this.selectedDate + 'T12:00:00');
+                    return date.toLocaleDateString('en-US', { 
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                    });
+                }
+            },
+            watch: {
+                activeTab(newTab) {
+                    if (newTab === 'analytics') {
+                        this.$nextTick(() => {
+                            this.loadAnalytics();
+                        });
+                    } else if (newTab === 'timeline') {
+                        this.loadTimelineByDate();
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

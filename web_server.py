@@ -1,0 +1,679 @@
+"""Chronometry Web Server - Modern Web Interface on Port 8051."""
+
+import os
+import json
+import logging
+import base64
+import io
+from datetime import datetime, timedelta
+from pathlib import Path
+from collections import defaultdict
+from typing import List, Dict, Optional
+
+from flask import Flask, jsonify, render_template, request, send_file, Response
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
+import pandas as pd
+from PIL import Image
+
+from common import load_config, get_daily_dir, get_frame_path
+from timeline import load_annotations, categorize_activity, group_activities, calculate_stats
+from digest import get_or_generate_digest
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Initialize Flask app
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'chronometry-secret-key-2025'
+CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Global config
+config = None
+
+
+def init_config():
+    """Initialize configuration."""
+    global config
+    try:
+        config = load_config()
+        logger.info("Configuration loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load configuration: {e}")
+        raise
+
+
+@app.route('/')
+def index():
+    """Serve the main dashboard page."""
+    return render_template('dashboard.html')
+
+
+@app.route('/api/health')
+def health_check():
+    """Health check endpoint."""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'version': '1.0.0'
+    })
+
+
+@app.route('/api/config')
+def get_config():
+    """Get current configuration."""
+    return jsonify({
+        'capture': {
+            'fps': config['capture']['fps'],
+            'monitor_index': config['capture']['monitor_index'],
+            'retention_days': config['capture']['retention_days']
+        },
+        'annotation': {
+            'batch_size': config['annotation']['batch_size']
+        },
+        'timeline': {
+            'bucket_minutes': config['timeline']['bucket_minutes']
+        },
+        'digest': {
+            'enabled': config.get('digest', {}).get('enabled', True),
+            'interval_seconds': config.get('digest', {}).get('interval_seconds', 3600),
+            'active_hours': config.get('digest', {}).get('active_hours', None),
+            'auto_regenerate': config.get('digest', {}).get('auto_regenerate', True)
+        }
+    })
+
+
+@app.route('/api/config', methods=['PUT'])
+def update_config():
+    """Update configuration."""
+    try:
+        updates = request.json
+        
+        # Update config file
+        import yaml
+        with open('config.yaml', 'r') as f:
+            current_config = yaml.safe_load(f)
+        
+        # Apply updates (simple merge)
+        if 'capture' in updates:
+            current_config['capture'].update(updates['capture'])
+        if 'annotation' in updates:
+            current_config['annotation'].update(updates['annotation'])
+        if 'timeline' in updates:
+            current_config['timeline'].update(updates['timeline'])
+        if 'digest' in updates:
+            if 'digest' not in current_config:
+                current_config['digest'] = {}
+            current_config['digest'].update(updates['digest'])
+        
+        # Save updated config
+        with open('config.yaml', 'w') as f:
+            yaml.dump(current_config, f, default_flow_style=False)
+        
+        # Reload config
+        init_config()
+        
+        return jsonify({'status': 'success', 'message': 'Configuration updated'})
+    except Exception as e:
+        logger.error(f"Error updating config: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/stats')
+def get_stats():
+    """Get overall statistics across all days."""
+    try:
+        root_dir = config['root_dir']
+        frames_dir = Path(root_dir) / 'frames'
+        
+        if not frames_dir.exists():
+            return jsonify({
+                'total_days': 0,
+                'total_frames': 0,
+                'total_activities': 0,
+                'average_focus': 0
+            })
+        
+        total_frames = 0
+        total_activities = 0
+        total_focus = 0
+        days_count = 0
+        
+        for date_dir in frames_dir.iterdir():
+            if not date_dir.is_dir():
+                continue
+            
+            try:
+                # Count frames
+                json_files = list(date_dir.glob('*.json'))
+                total_frames += len(json_files)
+                
+                # Load annotations and calculate stats
+                annotations = load_annotations(date_dir)
+                if annotations:
+                    activities = group_activities(annotations)
+                    stats = calculate_stats(activities)
+                    total_activities += len(activities)
+                    total_focus += stats['focus_percentage']
+                    days_count += 1
+                    
+            except Exception as e:
+                logger.warning(f"Error processing {date_dir}: {e}")
+                continue
+        
+        return jsonify({
+            'total_days': days_count,
+            'total_frames': total_frames,
+            'total_activities': total_activities,
+            'average_focus': int(total_focus / days_count) if days_count > 0 else 0
+        })
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/timeline')
+def get_timeline():
+    """Get timeline data for a specific date or date range."""
+    try:
+        # Get query parameters
+        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        days = int(request.args.get('days', 1))  # Number of days to include
+        
+        root_dir = config['root_dir']
+        
+        # Parse start date
+        start_date = datetime.strptime(date_str, '%Y-%m-%d')
+        
+        all_activities = []
+        
+        # Collect activities for each day
+        for i in range(days):
+            current_date = start_date - timedelta(days=i)
+            daily_dir = get_daily_dir(root_dir, current_date)
+            
+            if not daily_dir.exists():
+                continue
+            
+            annotations = load_annotations(daily_dir)
+            if annotations:
+                activities = group_activities(annotations)
+                
+                # Add date info to each activity
+                for activity in activities:
+                    activity['date'] = current_date.strftime('%Y-%m-%d')
+                    activity['start_time_str'] = activity['start_time'].isoformat()
+                    activity['end_time_str'] = activity['end_time'].isoformat()
+                    
+                    # Remove datetime objects for JSON serialization
+                    del activity['start_time']
+                    del activity['end_time']
+                    del activity['frames']  # Too large for API response
+                
+                all_activities.extend(activities)
+        
+        # Sort by time
+        all_activities.sort(key=lambda x: x['start_time_str'], reverse=True)
+        
+        return jsonify({
+            'activities': all_activities,
+            'count': len(all_activities)
+        })
+    except Exception as e:
+        logger.error(f"Error getting timeline: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/timeline/<date>')
+def get_timeline_by_date(date):
+    """Get timeline data for a specific date with full details."""
+    try:
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        root_dir = config['root_dir']
+        daily_dir = get_daily_dir(root_dir, date_obj)
+        
+        if not daily_dir.exists():
+            return jsonify({
+                'date': date,
+                'activities': [],
+                'stats': {}
+            })
+        
+        # Load annotations
+        annotations = load_annotations(daily_dir)
+        
+        if not annotations:
+            return jsonify({
+                'date': date,
+                'activities': [],
+                'stats': {}
+            })
+        
+        # Group into activities
+        activities = group_activities(annotations)
+        stats = calculate_stats(activities)
+        
+        # Prepare activity data
+        activity_data = []
+        for activity in activities:
+            activity_info = {
+                'category': activity['category'],
+                'icon': activity['icon'],
+                'color': activity['color'],
+                'start_time': activity['start_time'].isoformat(),
+                'end_time': activity['end_time'].isoformat(),
+                'summary': activity['summary'],
+                'frame_count': len(activity['frames']),
+                'duration_minutes': int((activity['end_time'] - activity['start_time']).total_seconds() / 60)
+            }
+            activity_data.append(activity_info)
+        
+        return jsonify({
+            'date': date,
+            'activities': activity_data,
+            'stats': stats
+        })
+    except Exception as e:
+        logger.error(f"Error getting timeline for {date}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/search')
+def search_activities():
+    """Search activities across all dates."""
+    try:
+        query = request.args.get('q', '').lower()
+        category = request.args.get('category', '')
+        days = int(request.args.get('days', 7))  # Search last 7 days by default
+        
+        root_dir = config['root_dir']
+        frames_dir = Path(root_dir) / 'frames'
+        
+        if not frames_dir.exists():
+            return jsonify({'results': []})
+        
+        results = []
+        
+        # Search through recent days
+        for i in range(days):
+            date = datetime.now() - timedelta(days=i)
+            daily_dir = get_daily_dir(root_dir, date)
+            
+            if not daily_dir.exists():
+                continue
+            
+            annotations = load_annotations(daily_dir)
+            if not annotations:
+                continue
+            
+            activities = group_activities(annotations)
+            
+            for activity in activities:
+                # Apply filters
+                summary_lower = activity['summary'].lower()
+                
+                if query and query not in summary_lower:
+                    continue
+                
+                if category and activity['category'].lower() != category.lower():
+                    continue
+                
+                # Add to results
+                results.append({
+                    'date': date.strftime('%Y-%m-%d'),
+                    'category': activity['category'],
+                    'icon': activity['icon'],
+                    'color': activity['color'],
+                    'start_time': activity['start_time'].isoformat(),
+                    'end_time': activity['end_time'].isoformat(),
+                    'summary': activity['summary'],
+                    'duration_minutes': int((activity['end_time'] - activity['start_time']).total_seconds() / 60)
+                })
+        
+        return jsonify({
+            'query': query,
+            'category': category,
+            'results': results,
+            'count': len(results)
+        })
+    except Exception as e:
+        logger.error(f"Error searching: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics')
+def get_analytics():
+    """Get detailed analytics and insights."""
+    try:
+        days = int(request.args.get('days', 7))
+        
+        root_dir = config['root_dir']
+        
+        # Collect data
+        daily_stats = []
+        category_totals = defaultdict(int)
+        hourly_activity = defaultdict(int)
+        
+        for i in range(days):
+            date = datetime.now() - timedelta(days=i)
+            daily_dir = get_daily_dir(root_dir, date)
+            
+            if not daily_dir.exists():
+                continue
+            
+            annotations = load_annotations(daily_dir)
+            if not annotations:
+                continue
+            
+            activities = group_activities(annotations)
+            stats = calculate_stats(activities)
+            
+            daily_stats.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'focus_percentage': stats['focus_percentage'],
+                'distraction_percentage': stats['distraction_percentage'],
+                'total_activities': len(activities),
+                'total_time': stats['total_time']
+            })
+            
+            # Aggregate category data
+            for activity in activities:
+                duration = (activity['end_time'] - activity['start_time']).total_seconds() / 60
+                category_totals[activity['category']] += duration
+                
+                # Hourly distribution
+                hour = activity['start_time'].hour
+                hourly_activity[hour] += duration
+        
+        # Convert to lists for JSON
+        category_breakdown = [
+            {'category': k, 'minutes': int(v)}
+            for k, v in sorted(category_totals.items(), key=lambda x: x[1], reverse=True)
+        ]
+        
+        hourly_breakdown = [
+            {'hour': h, 'minutes': int(hourly_activity.get(h, 0))}
+            for h in range(24)
+        ]
+        
+        return jsonify({
+            'daily_stats': daily_stats,
+            'category_breakdown': category_breakdown,
+            'hourly_breakdown': hourly_breakdown
+        })
+    except Exception as e:
+        logger.error(f"Error getting analytics: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/export/csv')
+def export_csv():
+    """Export timeline data as CSV."""
+    try:
+        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        
+        root_dir = config['root_dir']
+        daily_dir = get_daily_dir(root_dir, date_obj)
+        
+        if not daily_dir.exists():
+            return jsonify({'error': 'No data for this date'}), 404
+        
+        annotations = load_annotations(daily_dir)
+        if not annotations:
+            return jsonify({'error': 'No annotations found'}), 404
+        
+        activities = group_activities(annotations)
+        
+        # Create DataFrame
+        data = []
+        for activity in activities:
+            data.append({
+                'Date': date_str,
+                'Category': activity['category'],
+                'Start Time': activity['start_time'].strftime('%H:%M:%S'),
+                'End Time': activity['end_time'].strftime('%H:%M:%S'),
+                'Duration (minutes)': int((activity['end_time'] - activity['start_time']).total_seconds() / 60),
+                'Summary': activity['summary']
+            })
+        
+        df = pd.DataFrame(data)
+        
+        # Convert to CSV
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+        
+        return Response(
+            csv_buffer.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=timeline_{date_str}.csv'}
+        )
+    except Exception as e:
+        logger.error(f"Error exporting CSV: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/export/json')
+def export_json():
+    """Export timeline data as JSON."""
+    try:
+        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        
+        root_dir = config['root_dir']
+        daily_dir = get_daily_dir(root_dir, date_obj)
+        
+        if not daily_dir.exists():
+            return jsonify({'error': 'No data for this date'}), 404
+        
+        annotations = load_annotations(daily_dir)
+        if not annotations:
+            return jsonify({'error': 'No annotations found'}), 404
+        
+        activities = group_activities(annotations)
+        stats = calculate_stats(activities)
+        
+        # Prepare export data
+        export_data = {
+            'date': date_str,
+            'stats': stats,
+            'activities': []
+        }
+        
+        for activity in activities:
+            export_data['activities'].append({
+                'category': activity['category'],
+                'start_time': activity['start_time'].isoformat(),
+                'end_time': activity['end_time'].isoformat(),
+                'duration_minutes': int((activity['end_time'] - activity['start_time']).total_seconds() / 60),
+                'summary': activity['summary']
+            })
+        
+        return jsonify(export_data)
+    except Exception as e:
+        logger.error(f"Error exporting JSON: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/frames')
+def get_frames():
+    """Get list of frames for a specific date."""
+    try:
+        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        
+        root_dir = config['root_dir']
+        daily_dir = get_daily_dir(root_dir, date_obj)
+        
+        if not daily_dir.exists():
+            return jsonify({'frames': []})
+        
+        frames = []
+        json_files = sorted(daily_dir.glob('*.json'))
+        
+        for json_file in json_files:
+            with open(json_file, 'r') as f:
+                data = json.load(f)
+            
+            timestamp = json_file.stem
+            frames.append({
+                'timestamp': timestamp,
+                'datetime': datetime.strptime(timestamp, '%Y%m%d_%H%M%S').isoformat(),
+                'summary': data.get('summary', ''),
+                'image_file': data.get('image_file', '')
+            })
+        
+        return jsonify({'frames': frames})
+    except Exception as e:
+        logger.error(f"Error getting frames: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/frames/<date>/<timestamp>/image')
+def get_frame_image(date, timestamp):
+    """Get a specific frame image."""
+    try:
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        root_dir = config['root_dir']
+        daily_dir = get_daily_dir(root_dir, date_obj)
+        
+        image_path = daily_dir / f"{timestamp}.png"
+        
+        if not image_path.exists():
+            return jsonify({'error': 'Image not found'}), 404
+        
+        return send_file(str(image_path), mimetype='image/png')
+    except Exception as e:
+        logger.error(f"Error getting frame image: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dates')
+def get_available_dates():
+    """Get list of dates with captured data."""
+    try:
+        root_dir = config['root_dir']
+        frames_dir = Path(root_dir) / 'frames'
+        
+        if not frames_dir.exists():
+            return jsonify({'dates': []})
+        
+        dates = []
+        for date_dir in sorted(frames_dir.iterdir(), reverse=True):
+            if not date_dir.is_dir():
+                continue
+            
+            try:
+                # Validate date format
+                datetime.strptime(date_dir.name, '%Y-%m-%d')
+                
+                # Count frames
+                json_files = list(date_dir.glob('*.json'))
+                
+                dates.append({
+                    'date': date_dir.name,
+                    'frame_count': len(json_files)
+                })
+            except ValueError:
+                continue
+        
+        return jsonify({'dates': dates})
+    except Exception as e:
+        logger.error(f"Error getting dates: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/digest')
+@app.route('/api/digest/<date>')
+def get_digest(date=None):
+    """Get daily digest summary."""
+    try:
+        if date is None:
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            date_obj = datetime.now()
+        else:
+            date_str = date
+            date_obj = datetime.strptime(date, '%Y-%m-%d')
+        
+        # Check if force regenerate is requested
+        force_regenerate = request.args.get('force', 'false').lower() == 'true'
+        
+        # Get or generate digest
+        digest = get_or_generate_digest(date_obj, config, force_regenerate=force_regenerate)
+        
+        return jsonify(digest)
+    except Exception as e:
+        logger.error(f"Error getting digest: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+# WebSocket events for real-time updates
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection."""
+    logger.info('Client connected')
+    emit('connected', {'message': 'Connected to Chronometry server'})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection."""
+    logger.info('Client disconnected')
+
+
+@socketio.on('subscribe_live')
+def handle_subscribe_live():
+    """Subscribe to live activity updates."""
+    emit('subscribed', {'message': 'Subscribed to live updates'})
+
+
+def broadcast_new_frame(frame_data):
+    """Broadcast new frame to connected clients."""
+    socketio.emit('new_frame', frame_data)
+
+
+def broadcast_new_activity(activity_data):
+    """Broadcast new activity to connected clients."""
+    socketio.emit('new_activity', activity_data)
+
+
+def main():
+    """Main entry point for web server."""
+    try:
+        # Initialize configuration
+        init_config()
+        
+        # Create templates directory if it doesn't exist
+        templates_dir = Path('templates')
+        templates_dir.mkdir(exist_ok=True)
+        
+        logger.info("=" * 60)
+        logger.info("Chronometry Web Server")
+        logger.info("=" * 60)
+        logger.info(f"Starting server on http://localhost:8051")
+        logger.info(f"Dashboard: http://localhost:8051")
+        logger.info(f"API Docs: http://localhost:8051/api/health")
+        logger.info("=" * 60)
+        
+        # Run server
+        socketio.run(
+            app,
+            host='0.0.0.0',
+            port=8051,
+            debug=True,
+            allow_unsafe_werkzeug=True
+        )
+        
+    except Exception as e:
+        logger.error(f"Fatal error starting web server: {e}", exc_info=True)
+        raise
+
+
+if __name__ == '__main__':
+    main()
