@@ -390,18 +390,20 @@ class ChronometryApp(rumps.App):
     def run_annotation(self, _):
         """Manually trigger annotation."""
         logger.info("Manual annotation triggered...")
-        show_notification(
-            "Chronometry",
-            "Running Annotation - Processing captured frames..."
-        )
         
         def run():
             try:
-                annotate_frames(self.config)
-                show_notification(
-                    "Chronometry",
-                    "✅ Annotation Complete - Frames annotated successfully"
-                )
+                count = annotate_frames(self.config)
+                if count > 0:
+                    show_notification(
+                        "Chronometry",
+                        f"✅ Annotated {count} frame{'s' if count != 1 else ''} successfully"
+                    )
+                else:
+                    show_notification(
+                        "Chronometry",
+                        "⏳ Waiting for more frames to reach batch size (need 3)"
+                    )
             except Exception as e:
                 logger.error(f"Annotation failed: {e}")
                 show_notification("Chronometry", f"❌ Annotation Error: {str(e)}")

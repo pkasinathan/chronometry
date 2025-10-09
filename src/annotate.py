@@ -201,11 +201,14 @@ def process_batch(image_paths: List[Path], config: dict):
         logger.error(f"Error processing batch: {e}", exc_info=True)
 
 
-def annotate_frames(config: dict, date: datetime = None):
+def annotate_frames(config: dict, date: datetime = None) -> int:
     """Annotate all unannotated frames for a given date.
     
     Also checks yesterday's folder for any remaining unannotated frames to handle
     edge case where frames captured near midnight don't reach batch_size threshold.
+    
+    Returns:
+        Number of frames that were annotated (0 if waiting for batch_size)
     """
     root_dir = config['root_dir']
     annotation_config = config['annotation']
@@ -233,7 +236,7 @@ def annotate_frames(config: dict, date: datetime = None):
     
     if not dirs_to_check:
         logger.info(f"No frames found for {date.strftime('%Y-%m-%d')} or previous day")
-        return
+        return 0
     
     # Find all PNG files without corresponding JSON across checked directories
     for check_date, check_dir in dirs_to_check:
@@ -248,12 +251,12 @@ def annotate_frames(config: dict, date: datetime = None):
     
     if not unannotated:
         logger.info(f"All frames already annotated")
-        return
+        return 0
     
     # Check if we have enough frames for a batch
     if len(unannotated) < batch_size:
         logger.info(f"Only {len(unannotated)} unannotated frames across checked dates, waiting for {batch_size} (batch_size)")
-        return
+        return 0
     
     # Sort all unannotated frames by timestamp to maintain chronological order
     unannotated.sort()
@@ -267,6 +270,8 @@ def annotate_frames(config: dict, date: datetime = None):
         batch_num = i // batch_size + 1
         logger.info(f"Processing batch {batch_num}/{total_batches}")
         process_batch(batch, config)
+    
+    return len(unannotated)
 
 
 def main():
