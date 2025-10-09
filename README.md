@@ -43,6 +43,8 @@ A privacy-first, AI-powered work activity analyzer that automatically captures, 
 - **⚠️ 5-Second Warning** - Notification before capture starts
 - **📸 Pre-Capture Alerts** - Notification before every screenshot
 - **🔒 Screen Lock Detection** - Auto-skips when screen is locked
+- **📹 Camera Privacy Protection** - Auto-pauses during video calls (NEW!)
+- **🎯 Synthetic Annotations** - Tracks meeting time without screenshots
 - **⏸️ Easy Pause/Resume** - One-click pause for sensitive work
 - **🗑️ Auto-Cleanup** - Configurable data retention (default: 3 days)
 
@@ -143,37 +145,38 @@ annotation:
 timeline:
   bucket_minutes: 30           # Time grouping
 
-# Digest settings (NEW!)
+# Digest settings
 digest:
   enabled: true                # Enable digest generation
   interval_seconds: 3600       # Generate every 60 minutes
+  ncp_project_id: "prabhuai"   # Netflix Copilot project ID (NEW!)
 ```
 
 **Or configure via Web UI**: http://localhost:8051 → Settings
 
 ---
 
-## 🛠️ Shell Scripts
+## 🛠️ Service Management
 
-Chronometry provides **6 scripts** organized in **3 start/stop pairs**:
+**Primary Tool**: `manage_services.sh` - Comprehensive service controller
 
-### 1. Main Agent (Terminal)
 ```bash
-./start_chronometry_agent.sh    # Start monitoring
-./stop_chronometry_agent.sh     # Stop monitoring
+# Quick Commands
+./manage_services.sh start          # Start all services
+./manage_services.sh stop           # Stop all services  
+./manage_services.sh restart        # Restart all services
+./manage_services.sh status         # Check service status
+
+# Individual Services
+./manage_services.sh start menubar      # Start only menubar
+./manage_services.sh stop webserver     # Stop only webserver
+./manage_services.sh restart menubar    # Restart menubar
 ```
 
-### 2. Menu Bar App (macOS)
-```bash
-./start_chronometry_menubar.sh                 # Start menu bar
-./stop_chronometry_menubar.sh                  # Stop menu bar
-```
-
-### 3. Web Server
-```bash
-./start_chronometry_webserver.sh              # Start dashboard (port 8051)
-./stop_chronometry_webserver.sh                # Stop dashboard
-```
+**Individual Scripts** (called by manage_services.sh):
+- `start_chronometry_agent.sh` / `stop_chronometry_agent.sh`
+- `start_chronometry_menubar.sh` / `stop_chronometry_menubar.sh`
+- `start_chronometry_webserver.sh` / `stop_chronometry_webserver.sh`
 
 **See [SCRIPTS.md](SCRIPTS.md) for complete reference**
 
@@ -217,12 +220,14 @@ Screenshot → AI Summary → Activity Timeline → Daily Digest
 
 ### Timeline Tab
 - **Detailed Activities**: All activities with categories and durations
+- **Inline Expansion**: Click to expand details in-place (NEW!)
 - **Date Picker**: Navigate to any captured date
-- **Filters**: Filter by category
-- **Interactive**: Click for screenshots and details
+- **Screenshots Grid**: View all frames for an activity
+- **Full Timestamps**: Date with time component displayed
 
 ### Analytics Tab
 - **Focus Trends**: Daily focus percentage over time
+- **API Token Usage**: Track Copilot API consumption (NEW!)
 - **Category Breakdown**: Pie chart of activity distribution
 - **Hourly Heatmap**: When you're most active
 
@@ -232,9 +237,12 @@ Screenshot → AI Summary → Activity Timeline → Daily Digest
 - **Date Range**: Search across multiple days
 
 ### Settings Tab
+- **Containerized UI**: Settings organized by process (NEW!)
 - **Capture Settings**: FPS, monitor, retention
-- **Digest Settings**: Enable/disable, timing interval
-- **Live Preview**: See changes in real-time
+- **Annotation Settings**: Batch size
+- **Timeline Settings**: Bucket minutes
+- **Digest Settings**: Enable/disable, interval, NCP project ID (NEW!)
+- **Live Save**: Updates saved to config.yaml
 
 ---
 
@@ -242,11 +250,12 @@ Screenshot → AI Summary → Activity Timeline → Daily Digest
 
 ```
 Chronometry/
-├── capture.py                      # Screen capture module
+├── capture.py                      # Screen capture + camera detection
 ├── annotate.py                     # AI annotation module
 ├── timeline.py                     # Timeline generation
-├── digest.py                       # AI digest generation (NEW!)
-├── web_server.py                   # Web dashboard server (NEW!)
+├── digest.py                       # AI digest generation
+├── token_usage.py                  # Token usage tracking (NEW!)
+├── web_server.py                   # Web dashboard server
 ├── menubar_app.py                  # macOS menu bar app
 ├── common.py                       # Shared utilities
 ├── config.yaml                     # Configuration
@@ -265,9 +274,11 @@ Chronometry/
 │   ├── frames/
 │   │   └── YYYY-MM-DD/
 │   │       ├── YYYYMMDD_HHMMSS.png
-│   │       └── YYYYMMDD_HHMMSS.json
-│   └── digests/                    # AI summaries (NEW!)
-│       └── digest_YYYY-MM-DD.json
+│   │       └── YYYYMMDD_HHMMSS.json (can be synthetic)
+│   ├── digests/                    # AI summaries
+│   │   └── digest_YYYY-MM-DD.json
+│   └── token_usage/                # API token tracking (NEW!)
+│       └── YYYY-MM-DD.json
 │
 ├── output/                         # Auto-created
 │   └── timeline_YYYY-MM-DD.html
@@ -362,9 +373,11 @@ GET  /api/export/json?date=<date>  # Export as JSON
 ## 🛡️ Privacy & Security
 
 ### What Data is Collected
-- ✅ Screenshots of your active monitor
+- ✅ Screenshots of your active monitor (when camera is off)
 - ✅ AI-generated activity summaries
+- ✅ Synthetic annotations (when camera is on - no screenshots)
 - ✅ Timestamps and metadata
+- ✅ API token usage statistics
 
 ### Where Data Goes
 - ✅ Stored locally in `data/` directory
@@ -378,9 +391,33 @@ GET  /api/export/json?date=<date>  # Export as JSON
 - 🔒 Local-only storage
 - 🔒 HTTPS for all API calls
 - 🔒 Automatic cleanup after retention period
-- 🔒 Screen lock detection
+- 🔒 Screen lock detection (auto-skip)
+- 📹 **Camera detection** - Auto-pauses during video calls (NEW!)
+- 🎯 **Synthetic annotations** - Tracks time without screenshots
 - 🔒 Path validation prevents data leakage
 - 🔒 Input sanitization prevents injection attacks
+
+### Camera Privacy Protection (NEW!)
+
+**Automatic Detection:**
+- Detects camera usage via macOS system logs (`com.apple.cmio`)
+- Checks hardware registry (`ioreg AppleCameraInterface`)
+- Monitors camera LED indicator state
+- Works with: Google Meet, Zoom, FaceTime, Teams, Webex
+
+**What Happens:**
+1. Camera LED turns ON → Detection triggers
+2. Screenshot capture paused automatically
+3. Notification: "📹 Camera active - capture skipped"
+4. Synthetic annotation created: "In video meeting - screenshot skipped for privacy"
+5. Meeting time tracked in timeline/digest
+6. Camera OFF → Captures resume automatically
+
+**Privacy Benefits:**
+- ✅ No screenshots during video calls
+- ✅ No sensitive meeting content captured
+- ✅ Timeline remains complete with meeting periods
+- ✅ Fully automatic - no manual intervention
 
 ---
 
@@ -586,10 +623,12 @@ digest:
 - **Disk**: ~1-2MB per hour (with retention cleanup)
 - **Network**: Only during API calls (~2-3KB per annotation)
 
-### API Costs
-- **Annotation**: 1 call per frame
-- **Digest**: 6 calls per generation (5 category + 1 overall)
-- **Total**: ~14 calls/hour (1 annotation every 5 min + 1 digest/hour)
+### API Costs & Token Tracking
+- **Annotation**: 1 call per frame (~12 calls/hour at 5-min intervals)
+- **Digest**: ~5 calls per generation (varies by categories)
+- **Token Tracking**: All API calls logged to `data/token_usage/` (NEW!)
+- **Analytics Dashboard**: View token consumption over time
+- **Average**: ~1,500 tokens per digest generation
 
 ---
 
