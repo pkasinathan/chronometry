@@ -290,7 +290,16 @@ class ChronometryApp(rumps.App):
     
     def _annotation_loop(self):
         """Periodic annotation, timeline generation, and digest creation."""
-        annotation_interval = 120  # 2 minutes
+        # Calculate annotation interval based on capture rate and batch size
+        # If batch_size=3 and capture every 5min, wait 15min for 3 frames
+        capture_fps = self.config['capture'].get('fps', 0.00333333)
+        capture_interval = 1.0 / capture_fps if capture_fps > 0 else 300
+        batch_size = self.config['annotation'].get('batch_size', 1)
+        
+        # Annotation should run after batch_size * capture_interval
+        # Add small buffer to ensure frames are ready
+        annotation_interval = (batch_size * capture_interval) + 30  
+        
         timeline_interval = 300  # 5 minutes
         
         # Get digest interval from config
@@ -302,6 +311,8 @@ class ChronometryApp(rumps.App):
         last_timeline = 0
         last_digest = 0
         
+        logger.info(f"Annotation will run every {int(annotation_interval)}s (batch_size={batch_size}, capture={int(capture_interval)}s)")
+        
         while not self.stop_event.is_set():
             time.sleep(10)  # Check every 10 seconds
             
@@ -310,10 +321,10 @@ class ChronometryApp(rumps.App):
             
             current_time = time.time()
             
-            # Run annotation every 2 minutes
+            # Run annotation based on calculated interval
             if current_time - last_annotation >= annotation_interval:
                 try:
-                    logger.info("Running periodic annotation...")
+                    logger.info(f"Running periodic annotation (batch_size={batch_size})...")
                     annotate_frames(self.config)
                     last_annotation = current_time
                     logger.info("Annotation completed")

@@ -223,7 +223,12 @@ def annotate_frames(config: dict, date: datetime = None):
         logger.info(f"All frames already annotated for {date.strftime('%Y-%m-%d')}")
         return
     
-    logger.info(f"Found {len(unannotated)} unannotated frames")
+    # Check if we have enough frames for a batch
+    if len(unannotated) < batch_size:
+        logger.info(f"Only {len(unannotated)} unannotated frames, waiting for {batch_size} (batch_size)")
+        return
+    
+    logger.info(f"Found {len(unannotated)} unannotated frames, processing in batches of {batch_size}")
     
     # Process in batches
     total_batches = (len(unannotated) + batch_size - 1) // batch_size
