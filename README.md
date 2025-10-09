@@ -31,9 +31,10 @@ A privacy-first, AI-powered work activity analyzer that automatically captures, 
 
 ### Core Functionality
 - **📸 Automatic Screen Capture** - Configurable intervals (default: every 5 minutes)
+- **⚡ Capture Now (Cmd+Shift+6)** - Manual ad-hoc screenshots with global hotkey
 - **🤖 AI Annotation** - Automatic activity summarization via Metatron API
 - **📋 Daily Digest** - AI-powered daily summaries via Copilot API (GPT-4o)
-- **📊 Interactive Timeline** - Detailed activity timeline with filters
+- **📊 Interactive Timeline** - Detailed activity timeline with date navigation
 - **📈 Analytics Dashboard** - Charts, insights, and productivity metrics
 - **🔍 Search** - Search through all your activities
 - **⚙️ Settings** - Configure everything via web UI
@@ -454,8 +455,9 @@ GET  /api/export/json?date=<date>  # Export as JSON
 
 ## 📚 Documentation
 
-- **[SCRIPTS.md](SCRIPTS.md)** - Complete shell script reference (all 6 scripts)
 - **[README.md](README.md)** - This file - project overview and quick start
+- **[SETUP.md](SETUP.md)** - Complete setup guide with hotkey configuration
+- **[SCRIPTS.md](SCRIPTS.md)** - Shell script reference (all 6 scripts)
 - **Script Headers** - Each .sh file has 50+ line documentation header
 - **Code Comments** - Inline documentation in all Python modules
 
@@ -507,6 +509,9 @@ Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows/Linux)
 pip install -r requirements.txt
 ./bin/manage_services.sh install    # Install as services
 ./bin/manage_services.sh start      # Start all services
+
+# Setup keyboard shortcut (see SETUP.md)
+# Grant accessibility permission for Cmd+Shift+6 hotkey
 ```
 
 ### Daily Use
@@ -517,8 +522,11 @@ http://localhost:8051
 # Start monitoring
 Click menu bar icon → Start Capture
 
+# Capture important moments
+Press Cmd+Shift+6 (instant screenshot)
+
 # View digest
-Dashboard tab shows AI summary of your day
+Dashboard → Digest tab → Navigate dates
 
 # Search activities
 Search tab → enter keywords

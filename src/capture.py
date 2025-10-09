@@ -219,11 +219,7 @@ def capture_single_frame(config: dict, show_notifications: bool = True) -> bool:
             )
             return False
         
-        # Show notification before capture
-        if show_notifications:
-            show_notification("Chronometry", "📸 Capturing screenshot now...")
-        
-        # Capture screenshot
+        # Capture screenshot (no pre-notification for instant capture)
         with mss.mss() as sct:
             monitors = sct.monitors
             
