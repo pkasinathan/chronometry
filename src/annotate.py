@@ -8,7 +8,7 @@ import tempfile
 import time
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict
 from urllib.parse import urlparse
 from common import (
@@ -202,7 +202,11 @@ def process_batch(image_paths: List[Path], config: dict):
 
 
 def annotate_frames(config: dict, date: datetime = None):
-    """Annotate all unannotated frames for a given date."""
+    """Annotate all unannotated frames for a given date.
+    
+    Also checks yesterday's folder for any remaining unannotated frames to handle
+    edge case where frames captured near midnight don't reach batch_size threshold.
+    """
     root_dir = config['root_dir']
     annotation_config = config['annotation']
     batch_size = annotation_config.get('batch_size', 1)
@@ -212,29 +216,49 @@ def annotate_frames(config: dict, date: datetime = None):
     if date is None:
         date = datetime.now()
     
-    daily_dir = get_daily_dir(root_dir, date)
+    # Collect unannotated frames from multiple directories
+    unannotated = []
+    dirs_to_check = []
     
-    if not daily_dir.exists():
-        logger.info(f"No frames found for {date.strftime('%Y-%m-%d')}")
+    # Always check yesterday's folder first (to catch cross-midnight frames)
+    yesterday = date - timedelta(days=1)
+    yesterday_dir = get_daily_dir(root_dir, yesterday)
+    if yesterday_dir.exists():
+        dirs_to_check.append((yesterday, yesterday_dir))
+    
+    # Then check today's folder
+    daily_dir = get_daily_dir(root_dir, date)
+    if daily_dir.exists():
+        dirs_to_check.append((date, daily_dir))
+    
+    if not dirs_to_check:
+        logger.info(f"No frames found for {date.strftime('%Y-%m-%d')} or previous day")
         return
     
-    # Find all PNG files without corresponding JSON (optimized with list comprehension)
-    png_files = sorted(daily_dir.glob("*.png"))
-    unannotated = [
-        png_path for png_path in png_files 
-        if not get_json_path(png_path, json_suffix).exists()
-    ]
+    # Find all PNG files without corresponding JSON across checked directories
+    for check_date, check_dir in dirs_to_check:
+        png_files = sorted(check_dir.glob("*.png"))
+        dir_unannotated = [
+            png_path for png_path in png_files 
+            if not get_json_path(png_path, json_suffix).exists()
+        ]
+        if dir_unannotated:
+            logger.info(f"Found {len(dir_unannotated)} unannotated frames in {check_date.strftime('%Y-%m-%d')}")
+            unannotated.extend(dir_unannotated)
     
     if not unannotated:
-        logger.info(f"All frames already annotated for {date.strftime('%Y-%m-%d')}")
+        logger.info(f"All frames already annotated")
         return
     
     # Check if we have enough frames for a batch
     if len(unannotated) < batch_size:
-        logger.info(f"Only {len(unannotated)} unannotated frames, waiting for {batch_size} (batch_size)")
+        logger.info(f"Only {len(unannotated)} unannotated frames across checked dates, waiting for {batch_size} (batch_size)")
         return
     
-    logger.info(f"Found {len(unannotated)} unannotated frames, processing in batches of {batch_size}")
+    # Sort all unannotated frames by timestamp to maintain chronological order
+    unannotated.sort()
+    
+    logger.info(f"Found {len(unannotated)} total unannotated frames, processing in batches of {batch_size}")
     
     # Process in batches
     total_batches = (len(unannotated) + batch_size - 1) // batch_size
