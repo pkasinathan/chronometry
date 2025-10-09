@@ -947,11 +947,16 @@
                     </div>
                 </div>
                 
-                <!-- Today's Digest -->
+                <!-- Digest -->
                 <div class="section">
                     <div class="section-header">
-                        <h2 class="section-title">📋 Today's Digest</h2>
+                        <h2 class="section-title">📋 Digest</h2>
                         <div class="section-actions">
+                            <div class="date-picker">
+                                <input type="date" v-model="digestDate" @change="loadDigest" class="date-input">
+                                <button class="btn" @click="previousDigestDay">‹ Prev</button>
+                                <button class="btn" @click="nextDigestDay">Next ›</button>
+                            </div>
                             <button class="btn" @click="regenerateDigest" title="Regenerate digest">🔄 Regenerate</button>
                             <button class="btn" @click="activeTab = 'timeline'">View Details</button>
                         </div>
@@ -1326,6 +1331,13 @@
                         const day = String(now.getDate()).padStart(2, '0');
                         return `${year}-${month}-${day}`;
                     })(),
+                    digestDate: (() => {
+                        const now = new Date();
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const day = String(now.getDate()).padStart(2, '0');
+                        return `${year}-${month}-${day}`;
+                    })(),
                     analyticsDays: 7,
                     stats: {
                         total_days: 0,
@@ -1422,8 +1434,8 @@
                     this.loadingDigest = true;
                     try {
                         const url = forceRegenerate 
-                            ? `/api/digest?force=true`
-                            : '/api/digest';
+                            ? `/api/digest/${this.digestDate}?force=true`
+                            : `/api/digest/${this.digestDate}`;
                         const response = await fetch(url);
                         const data = await response.json();
                         this.digest = data;
@@ -1439,6 +1451,24 @@
                 
                 async regenerateDigest() {
                     await this.loadDigest(true);
+                },
+                
+                previousDigestDay() {
+                    const date = new Date(this.digestDate);
+                    date.setDate(date.getDate() - 1);
+                    this.digestDate = date.toISOString().split('T')[0];
+                    this.loadDigest();
+                },
+                
+                nextDigestDay() {
+                    const date = new Date(this.digestDate);
+                    date.setDate(date.getDate() + 1);
+                    // Don't go beyond today
+                    const today = new Date();
+                    if (date <= today) {
+                        this.digestDate = date.toISOString().split('T')[0];
+                        this.loadDigest();
+                    }
                 },
                 
                 async loadTodayTimeline() {
