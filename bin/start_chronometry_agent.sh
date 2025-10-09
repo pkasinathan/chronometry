@@ -51,8 +51,8 @@ set -e  # Exit on error (except in specific cases)
 
 echo "Starting Chronometry..."
 
-# Change to script directory
-cd "$(dirname "$0")"
+# Change to project root directory (one level up from bin/)
+cd "$(dirname "$0")/.."
 
 # Check if virtual environment exists
 if [ ! -f "venv/bin/activate" ]; then
@@ -82,6 +82,9 @@ if [ ! -f "config/config.yaml" ]; then
 fi
 
 set +e  # Allow errors in the main loop
+
+# Set PYTHONPATH to include src directory
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 
 # Start capture in background
 echo "Starting capture process..."
@@ -130,9 +133,9 @@ cleanup() {
 trap cleanup INT TERM
 
 # Get digest interval from config (default: 60 minutes)
-DIGEST_INTERVAL=$(python -c "from common import load_config; c=load_config(); print(c.get('digest', {}).get('interval_seconds', 3600))" 2>/dev/null || echo 3600)
+DIGEST_INTERVAL=$(python -c "import sys; sys.path.insert(0, 'src'); from common import load_config; c=load_config(); print(c.get('digest', {}).get('interval_seconds', 3600))" 2>/dev/null || echo 3600)
 DIGEST_INTERVAL_MINUTES=$((DIGEST_INTERVAL / 60))
-DIGEST_ENABLED=$(python -c "from common import load_config; c=load_config(); print('true' if c.get('digest', {}).get('enabled', True) else 'false')" 2>/dev/null || echo "true")
+DIGEST_ENABLED=$(python -c "import sys; sys.path.insert(0, 'src'); from common import load_config; c=load_config(); print('true' if c.get('digest', {}).get('enabled', True) else 'false')" 2>/dev/null || echo "true")
 
 # Main loop
 echo "Capture running. Will annotate every 2 minutes, update timeline every 5 minutes"
@@ -159,7 +162,7 @@ while true; do
     # Run annotation every 2 minutes
     if [ $((COUNTER % 2)) -eq 0 ]; then
         echo "[$(date '+%H:%M:%S')] Running annotation..."
-        if python annotate.py; then
+        if python src/annotate.py; then
             echo "[$(date '+%H:%M:%S')] Annotation completed"
         else
             echo "[$(date '+%H:%M:%S')] Annotation failed (continuing...)"
@@ -169,7 +172,7 @@ while true; do
     # Run timeline every 5 minutes
     if [ $((COUNTER % 5)) -eq 0 ]; then
         echo "[$(date '+%H:%M:%S')] Generating timeline..."
-        if python timeline.py; then
+        if python src/timeline.py; then
             echo "[$(date '+%H:%M:%S')] Timeline generated"
         else
             echo "[$(date '+%H:%M:%S')] Timeline generation failed (continuing...)"
@@ -179,7 +182,7 @@ while true; do
     # Run digest at configured interval
     if [ "$DIGEST_ENABLED" = "true" ] && [ $((COUNTER % DIGEST_INTERVAL_MINUTES)) -eq 0 ]; then
         echo "[$(date '+%H:%M:%S')] Generating digest..."
-        if python -c "from digest import generate_daily_digest; from common import load_config; from datetime import datetime; generate_daily_digest(datetime.now(), load_config())"; then
+        if python -c "import sys; sys.path.insert(0, 'src'); from digest import generate_daily_digest; from common import load_config; from datetime import datetime; generate_daily_digest(datetime.now(), load_config())"; then
             echo "[$(date '+%H:%M:%S')] Digest generated"
         else
             echo "[$(date '+%H:%M:%S')] Digest generation failed (continuing...)"

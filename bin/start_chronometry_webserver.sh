@@ -79,6 +79,9 @@ echo "  Chronometry Web Server"
 echo "================================================"
 echo ""
 
+# Change to project root directory (one level up from bin/)
+cd "$(dirname "$0")/.."
+
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
     echo "❌ Virtual environment not found!"
@@ -114,6 +117,9 @@ echo "Press Ctrl+C to stop the server"
 echo ""
 echo "================================================"
 echo ""
+
+# Set PYTHONPATH to include src directory
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 
 # Start the web server
 python src/web_server.py

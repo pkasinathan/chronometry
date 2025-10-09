@@ -97,13 +97,19 @@ def call_metatron_api(images: List[Dict], config: dict) -> Dict:
         if not isinstance(response, dict):
             raise Exception("Invalid API response format: expected dictionary")
         
-        # Ensure required fields exist (with defaults)
+        # Validate and ensure required fields exist
         if 'summary' not in response:
             logger.warning("API response missing 'summary' field, using empty string")
             response['summary'] = ""
+        elif not isinstance(response['summary'], str):
+            logger.warning(f"API response 'summary' is not a string (type: {type(response['summary'])}), converting")
+            response['summary'] = str(response['summary'])
         
         if 'sources' not in response:
             logger.warning("API response missing 'sources' field, using empty list")
+            response['sources'] = []
+        elif not isinstance(response['sources'], list):
+            logger.warning(f"API response 'sources' is not a list (type: {type(response['sources'])}), converting")
             response['sources'] = []
         
         return response

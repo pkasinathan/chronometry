@@ -38,9 +38,13 @@ def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> List[Dict]:
                 # Try to load corresponding image as base64
                 img_path = json_path.parent / data.get('image_file', f"{timestamp_str}.png")
                 if img_path.exists():
-                    with open(img_path, 'rb') as img_f:
-                        img_data = base64.b64encode(img_f.read()).decode('utf-8')
-                        data['image_base64'] = f"data:image/png;base64,{img_data}"
+                    try:
+                        with open(img_path, 'rb') as img_f:
+                            img_data = base64.b64encode(img_f.read()).decode('utf-8')
+                            data['image_base64'] = f"data:image/png;base64,{img_data}"
+                    except Exception as img_error:
+                        logger.warning(f"Failed to load image {img_path}: {img_error}")
+                        data['image_base64'] = None
                 else:
                     data['image_base64'] = None
                     

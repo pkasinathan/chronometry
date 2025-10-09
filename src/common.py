@@ -122,6 +122,12 @@ def cleanup_old_data(root_dir: str, retention_days: int):
     Args:
         root_dir: Root directory for data storage
         retention_days: Number of days to keep data
+        
+    Cleans up:
+    - frames/YYYY-MM-DD/ directories
+    - digests/digest_YYYY-MM-DD.json files
+    - token_usage/YYYY-MM-DD.json files
+    - output/timeline_YYYY-MM-DD.html files
     """
     if retention_days <= 0:
         return
@@ -140,29 +146,73 @@ def cleanup_old_data(root_dir: str, retention_days: int):
         )
         return
     
-    frames_dir = root_path / "frames"
-    if not frames_dir.exists():
-        return
-    
     cutoff_date = datetime.now() - timedelta(days=retention_days)
     
-    for date_dir in frames_dir.iterdir():
-        if not date_dir.is_dir():
-            continue
-        
-        try:
-            # Parse date from directory name (must be YYYY-MM-DD format)
-            dir_date = datetime.strptime(date_dir.name, "%Y-%m-%d")
-            if dir_date < cutoff_date:
-                logger.info(f"Deleting old data: {date_dir}")
-                shutil.rmtree(date_dir)
-        except ValueError:
-            # Skip directories that don't match date format
-            logger.debug(f"Skipping non-date directory: {date_dir.name}")
-            continue
-        except Exception as e:
-            logger.error(f"Error deleting {date_dir}: {e}")
-            continue
+    # Cleanup frames directories
+    frames_dir = root_path / "frames"
+    if frames_dir.exists():
+        for date_dir in frames_dir.iterdir():
+            if not date_dir.is_dir():
+                continue
+            
+            try:
+                # Parse date from directory name (must be YYYY-MM-DD format)
+                dir_date = datetime.strptime(date_dir.name, "%Y-%m-%d")
+                if dir_date < cutoff_date:
+                    logger.info(f"Deleting old frames: {date_dir}")
+                    shutil.rmtree(date_dir)
+            except ValueError:
+                # Skip directories that don't match date format
+                logger.debug(f"Skipping non-date directory: {date_dir.name}")
+                continue
+            except Exception as e:
+                logger.error(f"Error deleting {date_dir}: {e}")
+                continue
+    
+    # Cleanup digest files
+    digests_dir = root_path / "digests"
+    if digests_dir.exists():
+        for digest_file in digests_dir.glob("digest_*.json"):
+            try:
+                # Extract date from filename: digest_YYYY-MM-DD.json
+                date_str = digest_file.stem.replace("digest_", "")
+                file_date = datetime.strptime(date_str, "%Y-%m-%d")
+                if file_date < cutoff_date:
+                    logger.info(f"Deleting old digest: {digest_file}")
+                    digest_file.unlink()
+            except (ValueError, Exception) as e:
+                logger.debug(f"Skipping file {digest_file}: {e}")
+                continue
+    
+    # Cleanup token usage files
+    token_dir = root_path / "token_usage"
+    if token_dir.exists():
+        for token_file in token_dir.glob("*.json"):
+            try:
+                # Filename format: YYYY-MM-DD.json
+                date_str = token_file.stem
+                file_date = datetime.strptime(date_str, "%Y-%m-%d")
+                if file_date < cutoff_date:
+                    logger.info(f"Deleting old token usage: {token_file}")
+                    token_file.unlink()
+            except (ValueError, Exception) as e:
+                logger.debug(f"Skipping file {token_file}: {e}")
+                continue
+    
+    # Cleanup output timeline files (check parent directory for output/)
+    output_dir = current_dir / "output"
+    if output_dir.exists():
+        for timeline_file in output_dir.glob("timeline_*.html"):
+            try:
+                # Extract date from filename: timeline_YYYY-MM-DD.html
+                date_str = timeline_file.stem.replace("timeline_", "")
+                file_date = datetime.strptime(date_str, "%Y-%m-%d")
+                if file_date < cutoff_date:
+                    logger.info(f"Deleting old timeline: {timeline_file}")
+                    timeline_file.unlink()
+            except (ValueError, Exception) as e:
+                logger.debug(f"Skipping file {timeline_file}: {e}")
+                continue
 
 
 def get_frame_path(root_dir: str, timestamp: datetime) -> Path:

@@ -68,8 +68,8 @@ set -e
 
 echo "Starting Chronometry Menu Bar App..."
 
-# Change to script directory
-cd "$(dirname "$0")"
+# Change to project root directory (one level up from bin/)
+cd "$(dirname "$0")/.."
 
 # Check if virtual environment exists
 if [ ! -f "venv/bin/activate" ]; then
@@ -96,6 +96,9 @@ if [ ! -f "config/config.yaml" ]; then
     echo "Please create a config/config.yaml file in the config directory."
     exit 1
 fi
+
+# Set PYTHONPATH to include src directory
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 
 # Run the menu bar app
 echo "Launching menu bar application..."

@@ -2,6 +2,8 @@
 
 import json
 import logging
+import fcntl
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -49,37 +51,64 @@ class TokenUsageTracker:
         date_str = now.strftime('%Y-%m-%d')
         log_file = self.token_dir / f"{date_str}.json"
         
-        # Load existing log
-        if log_file.exists():
-            with open(log_file, 'r') as f:
-                log_data = json.load(f)
-        else:
-            log_data = {
-                'date': date_str,
-                'total_tokens': 0,
-                'calls': []
-            }
+        # Use file locking to prevent race conditions
+        # Create lock file
+        lock_file = self.token_dir / f".{date_str}.lock"
         
-        # Add new entry
-        entry = {
-            'timestamp': now.isoformat(),
-            'api_type': api_type,
-            'tokens': tokens,
-            'prompt_tokens': prompt_tokens,
-            'completion_tokens': completion_tokens
-        }
-        
-        if context:
-            entry['context'] = context
-        
-        log_data['calls'].append(entry)
-        log_data['total_tokens'] = sum(call['tokens'] for call in log_data['calls'])
-        
-        # Save log
-        with open(log_file, 'w') as f:
-            json.dump(log_data, f, indent=2)
-        
-        logger.info(f"Token usage logged: {api_type} - {tokens} tokens (total today: {log_data['total_tokens']})")
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                # Acquire lock
+                with open(lock_file, 'w') as lock:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+                    
+                    try:
+                        # Load existing log
+                        if log_file.exists():
+                            with open(log_file, 'r') as f:
+                                log_data = json.load(f)
+                        else:
+                            log_data = {
+                                'date': date_str,
+                                'total_tokens': 0,
+                                'calls': []
+                            }
+                        
+                        # Add new entry
+                        entry = {
+                            'timestamp': now.isoformat(),
+                            'api_type': api_type,
+                            'tokens': tokens,
+                            'prompt_tokens': prompt_tokens,
+                            'completion_tokens': completion_tokens
+                        }
+                        
+                        if context:
+                            entry['context'] = context
+                        
+                        log_data['calls'].append(entry)
+                        log_data['total_tokens'] = sum(call['tokens'] for call in log_data['calls'])
+                        
+                        # Save log atomically
+                        temp_file = log_file.with_suffix('.tmp')
+                        with open(temp_file, 'w') as f:
+                            json.dump(log_data, f, indent=2)
+                        temp_file.replace(log_file)
+                        
+                        logger.info(f"Token usage logged: {api_type} - {tokens} tokens (total today: {log_data['total_tokens']})")
+                        break
+                        
+                    finally:
+                        # Release lock
+                        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+                        
+            except (IOError, OSError) as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Failed to acquire lock (attempt {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(0.1 * (attempt + 1))  # Exponential backoff
+                else:
+                    logger.error(f"Failed to log token usage after {max_retries} attempts: {e}")
+                    raise
     
     def get_daily_usage(self, date: datetime) -> Dict:
         """Get token usage for a specific date.

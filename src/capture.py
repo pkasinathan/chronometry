@@ -154,8 +154,9 @@ def is_camera_in_use() -> bool:
         
         try:
             cmio_count = int(lsof_result.stdout.strip())
-            # If Chrome has multiple CMIO files open (>5), camera is likely active
-            if cmio_count > 5:
+            # If Chrome has multiple CMIO files open (>10), camera is likely active
+            # Increased threshold from 5 to 10 to reduce false positives
+            if cmio_count > 10:
                 logger.info(f"📹 Camera detected in use via Chrome CMIO ({cmio_count} files)")
                 return True
         except:
@@ -311,13 +312,13 @@ def capture_screen(config: dict):
         except KeyboardInterrupt:
             logger.info("\nCapture stopped by user")
             show_notification(
-                "MyWorkAnalyzer Stopped",
+                "Chronometry Stopped",
                 f"Screen capture ended. {capture_count} frames captured."
             )
         except Exception as e:
             logger.error(f"Fatal error during capture: {e}", exc_info=True)
             show_notification(
-                "MyWorkAnalyzer Error",
+                "Chronometry Error",
                 "Screen capture stopped due to an error."
             )
 
