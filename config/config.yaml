@@ -35,7 +35,7 @@ annotation:
   
   # Number of images to send per API request
   # annotate.py processes PNGs in batches of this size
-  batch_size: 1
+  batch_size: 3
   
   # Command timeout in seconds
   # Passed to subprocess.run(timeout=timeout_sec) for metatron curl
