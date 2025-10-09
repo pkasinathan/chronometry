@@ -132,7 +132,7 @@ source venv/bin/activate
 
 ## ⚙️ Configuration
 
-Edit `config.yaml`:
+Edit `config/config.yaml`:
 
 ```yaml
 # Screen capture settings
@@ -163,25 +163,25 @@ digest:
 
 ## 🛠️ Service Management
 
-**Primary Tool**: `manage_services.sh` - Comprehensive service controller
+**Primary Tool**: `bin/manage_services.sh` - Comprehensive service controller
 
 ```bash
 # Quick Commands
-./manage_services.sh start          # Start all services
-./manage_services.sh stop           # Stop all services  
-./manage_services.sh restart        # Restart all services
-./manage_services.sh status         # Check service status
+./bin/manage_services.sh start          # Start all services
+./bin/manage_services.sh stop           # Stop all services  
+./bin/manage_services.sh restart        # Restart all services
+./bin/manage_services.sh status         # Check service status
 
 # Individual Services
-./manage_services.sh start menubar      # Start only menubar
-./manage_services.sh stop webserver     # Stop only webserver
-./manage_services.sh restart menubar    # Restart menubar
+./bin/manage_services.sh start menubar      # Start only menubar
+./bin/manage_services.sh stop webserver     # Stop only webserver
+./bin/manage_services.sh restart menubar    # Restart menubar
 ```
 
-**Individual Scripts** (called by manage_services.sh):
-- `start_chronometry_agent.sh` / `stop_chronometry_agent.sh`
-- `start_chronometry_menubar.sh` / `stop_chronometry_menubar.sh`
-- `start_chronometry_webserver.sh` / `stop_chronometry_webserver.sh`
+**Individual Scripts** (in `bin/` directory):
+- `bin/start_chronometry_agent.sh` / `bin/stop_chronometry_agent.sh`
+- `bin/start_chronometry_menubar.sh` / `bin/stop_chronometry_menubar.sh`
+- `bin/start_chronometry_webserver.sh` / `bin/stop_chronometry_webserver.sh`
 
 **See [SCRIPTS.md](SCRIPTS.md) for complete reference**
 
@@ -260,20 +260,23 @@ Chronometry/
 │   ├── start_chronometry_*.sh      # Start scripts (3)
 │   └── stop_chronometry_*.sh       # Stop scripts (3)
 │
-├── config/                         # Configuration files (NEW!)
+├── config/                         # Configuration files
 │   ├── config.yaml                 # Main configuration
 │   ├── com.chronometry.menubar.plist
-│   └── com.chronometry.webserver.plist
+│   ├── com.chronometry.webserver.plist
+│   └── README.md                   # Config documentation
 │
-├── Python Modules (root level)
+├── src/                            # Python modules
 │   ├── capture.py                  # Screen capture + camera detection
 │   ├── annotate.py                 # AI annotation module
 │   ├── timeline.py                 # Timeline generation
 │   ├── digest.py                   # AI digest generation
-│   ├── token_usage.py              # Token usage tracking (NEW!)
+│   ├── token_usage.py              # Token usage tracking
 │   ├── web_server.py               # Web dashboard server
 │   ├── menubar_app.py              # macOS menu bar app
-│   └── common.py                   # Shared utilities
+│   ├── common.py                   # Shared utilities
+│   ├── quick_test.py               # Testing utilities
+│   └── __init__.py                 # Package marker
 │
 ├── templates/
 │   └── dashboard.html              # Web dashboard UI
@@ -300,18 +303,19 @@ Chronometry/
 │   ├── webserver.log
 │   └── webserver.error.log
 │
-├── Wrapper Scripts (root - for backwards compatibility)
-│   ├── manage_services.sh          # → bin/manage_services.sh
-│   ├── start_chronometry_*.sh      # → bin/start_chronometry_*.sh
-│   └── stop_chronometry_*.sh       # → bin/stop_chronometry_*.sh
-│
 ├── README.md                       # This file
 ├── SCRIPTS.md                      # Script reference
 ├── SERVICE_SETUP.md                # Service setup guide
-└── requirements.txt                # Dependencies
+├── requirements.txt                # Dependencies
+└── requirements-dev.txt            # Dev dependencies
 ```
 
-**Note:** Wrapper scripts in root directory forward to actual scripts in `bin/` for backwards compatibility.
+**Structure Benefits:**
+- 📁 Clean root directory (only docs and requirements)
+- 🔧 All scripts organized in `bin/`
+- ⚙️ All config files in `config/`
+- 🐍 All Python modules in `src/`
+- 📊 Data and output directories auto-created
 
 ---
 
@@ -462,26 +466,26 @@ GET  /api/export/json?date=<date>  # Export as JSON
 ### "metatron: command not found"
 ```bash
 which metatron  # Check if installed
-# Install following Netflix internal docs
+# Install following Netflix internal documentation
 ```
 
 ### "Port 8051 already in use"
 ```bash
-sudo lsof -i :8051              # Find process
-kill -9 $(lsof -t -i :8051)     # Kill process
-./start_chronometry_webserver.sh           # Restart
+sudo lsof -i :8051                      # Find process
+kill -9 $(lsof -t -i :8051)             # Kill process
+./bin/start_chronometry_webserver.sh    # Restart
 ```
 
 ### "No digest generated"
 ```bash
 # Check if enabled
-grep "enabled:" config.yaml
+grep "enabled:" config/config.yaml
 
 # Check if annotations exist
-ls data/frames/*/$(date +%Y-%m-%d)/*.json
+ls data/frames/$(date +%Y-%m-%d)/*.json
 
 # Generate manually
-python digest.py
+python src/digest.py
 ```
 
 ### Web Dashboard Not Updating
@@ -490,8 +494,7 @@ python digest.py
 Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows/Linux)
 
 # Restart web server
-./stop_chronometry_webserver.sh
-./start_chronometry_webserver.sh
+./bin/manage_services.sh restart webserver
 ```
 
 ---
@@ -502,8 +505,8 @@ Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows/Linux)
 ```bash
 # Install and start
 pip install -r requirements.txt
-./start_chronometry_menubar.sh              # Menu bar app
-./start_chronometry_webserver.sh           # Web dashboard
+./bin/manage_services.sh install    # Install as services
+./bin/manage_services.sh start      # Start all services
 ```
 
 ### Daily Use
@@ -696,6 +699,6 @@ For internal Netflix use. Ensure compliance with Netflix tool policies.
 
 - **Script Reference**: See [SCRIPTS.md](SCRIPTS.md) - Complete guide to all 6 scripts
 - **Web Dashboard**: Visit http://localhost:8051 and explore the 5 tabs
-- **Configuration**: Edit `config.yaml` or use Settings tab in web UI
+- **Configuration**: Edit `config/config.yaml` or use Settings tab in web UI
 - **Script Headers**: Each .sh file has detailed usage documentation
 - **API Reference**: See API Endpoints section above
