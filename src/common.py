@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def load_config(config_path: str = "config.yaml") -> dict:
+def load_config(config_path: str = "config/config.yaml") -> dict:
     """Load and validate configuration from YAML file.
     
     Args:

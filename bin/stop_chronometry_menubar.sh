@@ -126,18 +126,18 @@ stop_processes() {
 }
 
 # Stop the menu bar app first
-stop_processes "python.*menubar_app.py" "Menu Bar App"
+stop_processes "python.*src/menubar_app.py" "Menu Bar App"
 
 # Stop the start script if running
 stop_processes "start_chronometry_menubar.sh" "Menu Bar Launch Script"
 
 # If menubar started capture, stop it
-if pgrep -f "python.*capture.py" > /dev/null; then
+if pgrep -f "python.*src/capture.py" > /dev/null; then
     echo "ℹ️  Capture process running (may have been started by menubar)"
     read -p "Stop capture process too? (y/n): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        stop_processes "python.*capture.py" "Capture Process"
+        stop_processes "python.*src/capture.py" "Capture Process"
     fi
 fi
 

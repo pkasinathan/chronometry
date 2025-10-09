@@ -91,12 +91,12 @@ if ! python -c "import rumps" 2>/dev/null; then
 fi
 
 # Verify config file exists
-if [ ! -f "config.yaml" ]; then
-    echo "Error: config.yaml not found"
-    echo "Please create a config.yaml file before running."
+if [ ! -f "config/config.yaml" ]; then
+    echo "Error: config/config.yaml not found"
+    echo "Please create a config/config.yaml file in the config directory."
     exit 1
 fi
 
 # Run the menu bar app
 echo "Launching menu bar application..."
-python menubar_app.py
+python src/menubar_app.py

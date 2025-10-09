@@ -98,9 +98,9 @@ if ! python -c "import flask" 2>/dev/null; then
 fi
 
 # Check if config exists
-if [ ! -f "config.yaml" ]; then
-    echo "❌ config.yaml not found!"
-    echo "Please ensure config.yaml exists in the current directory"
+if [ ! -f "config/config.yaml" ]; then
+    echo "❌ config/config.yaml not found!"
+    echo "Please ensure config/config.yaml exists in the config directory"
     exit 1
 fi
 
@@ -116,4 +116,4 @@ echo "================================================"
 echo ""
 
 # Start the web server
-python web_server.py
+python src/web_server.py

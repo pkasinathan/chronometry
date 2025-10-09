@@ -107,18 +107,18 @@ if [ -n "$start_script_pids" ]; then
 fi
 
 # Stop capture.py process
-stop_processes "python.*capture.py"
+stop_processes "python.*src/capture.py"
 
 # Stop any running annotate.py processes
-stop_processes "python.*annotate.py"
+stop_processes "python.*src/annotate.py"
 
 # Stop any running timeline.py processes
-stop_processes "python.*timeline.py"
+stop_processes "python.*src/timeline.py"
 
 # Verify all processes are stopped
-if pgrep -f "python.*capture.py" > /dev/null || \
-   pgrep -f "python.*annotate.py" > /dev/null || \
-   pgrep -f "python.*timeline.py" > /dev/null || \
+if pgrep -f "python.*src/capture.py" > /dev/null || \
+   pgrep -f "python.*src/annotate.py" > /dev/null || \
+   pgrep -f "python.*src/timeline.py" > /dev/null || \
    pgrep -f "start_chronometry_agent.sh" > /dev/null; then
     echo "Warning: Some processes may still be running"
     echo "You can check with: ps aux | grep -E '(capture|annotate|timeline|start_chronometry)'"

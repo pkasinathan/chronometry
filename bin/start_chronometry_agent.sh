@@ -75,9 +75,9 @@ if ! python -c "import mss, PIL, yaml, plotly, pandas" 2>/dev/null; then
 fi
 
 # Verify config file exists
-if [ ! -f "config.yaml" ]; then
-    echo "Error: config.yaml not found"
-    echo "Please create a config.yaml file before running."
+if [ ! -f "config/config.yaml" ]; then
+    echo "Error: config/config.yaml not found"
+    echo "Please create a config/config.yaml file in the config directory."
     exit 1
 fi
 
@@ -85,7 +85,7 @@ set +e  # Allow errors in the main loop
 
 # Start capture in background
 echo "Starting capture process..."
-python capture.py &
+python src/capture.py &
 CAPTURE_PID=$!
 
 # Check if capture process started successfully

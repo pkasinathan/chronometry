@@ -104,12 +104,17 @@ source venv/bin/activate
 
 **Start the menu bar app**:
 ```bash
-./start_chronometry_menubar.sh
+./bin/start_chronometry_menubar.sh
 ```
 
 **Start the web dashboard** (separate terminal):
 ```bash
-./start_chronometry_webserver.sh
+./bin/start_chronometry_webserver.sh
+```
+
+**Or use the service manager:**
+```bash
+./bin/manage_services.sh start
 ```
 
 **Then**:
@@ -250,25 +255,31 @@ Screenshot → AI Summary → Activity Timeline → Daily Digest
 
 ```
 Chronometry/
-├── capture.py                      # Screen capture + camera detection
-├── annotate.py                     # AI annotation module
-├── timeline.py                     # Timeline generation
-├── digest.py                       # AI digest generation
-├── token_usage.py                  # Token usage tracking (NEW!)
-├── web_server.py                   # Web dashboard server
-├── menubar_app.py                  # macOS menu bar app
-├── common.py                       # Shared utilities
-├── config.yaml                     # Configuration
+├── bin/                            # Shell scripts (NEW!)
+│   ├── manage_services.sh          # Primary service manager
+│   ├── start_chronometry_*.sh      # Start scripts (3)
+│   └── stop_chronometry_*.sh       # Stop scripts (3)
 │
-├── start_chronometry_agent.sh   # Start main agent
-├── stop_chronometry_agent.sh    # Stop main agent
-├── start_chronometry_menubar.sh    # Start menu bar
-├── stop_chronometry_menubar.sh     # Stop menu bar
-├── start_chronometry_webserver.sh  # Start web server
-├── stop_chronometry_webserver.sh   # Stop web server
+├── config/                         # Configuration files (NEW!)
+│   ├── config.yaml                 # Main configuration
+│   ├── com.chronometry.menubar.plist
+│   └── com.chronometry.webserver.plist
+│
+├── Python Modules (root level)
+│   ├── capture.py                  # Screen capture + camera detection
+│   ├── annotate.py                 # AI annotation module
+│   ├── timeline.py                 # Timeline generation
+│   ├── digest.py                   # AI digest generation
+│   ├── token_usage.py              # Token usage tracking (NEW!)
+│   ├── web_server.py               # Web dashboard server
+│   ├── menubar_app.py              # macOS menu bar app
+│   └── common.py                   # Shared utilities
 │
 ├── templates/
 │   └── dashboard.html              # Web dashboard UI
+│
+├── tests/                          # Unit tests
+│   └── test_*.py
 │
 ├── data/                           # Auto-created
 │   ├── frames/
@@ -283,8 +294,24 @@ Chronometry/
 ├── output/                         # Auto-created
 │   └── timeline_YYYY-MM-DD.html
 │
+├── logs/                           # Service logs
+│   ├── menubar.log
+│   ├── menubar.error.log
+│   ├── webserver.log
+│   └── webserver.error.log
+│
+├── Wrapper Scripts (root - for backwards compatibility)
+│   ├── manage_services.sh          # → bin/manage_services.sh
+│   ├── start_chronometry_*.sh      # → bin/start_chronometry_*.sh
+│   └── stop_chronometry_*.sh       # → bin/stop_chronometry_*.sh
+│
+├── README.md                       # This file
+├── SCRIPTS.md                      # Script reference
+├── SERVICE_SETUP.md                # Service setup guide
 └── requirements.txt                # Dependencies
 ```
+
+**Note:** Wrapper scripts in root directory forward to actual scripts in `bin/` for backwards compatibility.
 
 ---
 

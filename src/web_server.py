@@ -98,7 +98,7 @@ def update_config():
         
         # Update config file
         import yaml
-        with open('config.yaml', 'r') as f:
+        with open('config/config.yaml', 'r') as f:
             current_config = yaml.safe_load(f)
         
         # Apply updates (simple merge)
@@ -114,7 +114,7 @@ def update_config():
             current_config['digest'].update(updates['digest'])
         
         # Save updated config
-        with open('config.yaml', 'w') as f:
+        with open('config/config.yaml', 'w') as f:
             yaml.dump(current_config, f, default_flow_style=False)
         
         # Reload config

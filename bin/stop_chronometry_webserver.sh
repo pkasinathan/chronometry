@@ -84,7 +84,7 @@ echo "Stopping Chronometry Web Server..."
 cd "$(dirname "$0")"
 
 # Find running web_server.py processes
-WEB_SERVER_PIDS=$(pgrep -f "python.*web_server.py")
+WEB_SERVER_PIDS=$(pgrep -f "python.*src/web_server.py")
 
 if [ -z "$WEB_SERVER_PIDS" ]; then
     echo "ℹ️  Web server is not running"
@@ -111,7 +111,7 @@ done
 # Wait up to 10 seconds for graceful shutdown
 echo "Waiting for web server to stop gracefully..."
 for i in {1..10}; do
-    REMAINING_PIDS=$(pgrep -f "python.*web_server.py")
+    REMAINING_PIDS=$(pgrep -f "python.*src/web_server.py")
     if [ -z "$REMAINING_PIDS" ]; then
         echo "✅ Web server stopped gracefully"
         
@@ -131,7 +131,7 @@ for i in {1..10}; do
 done
 
 # Force kill if still running (SIGKILL)
-REMAINING_PIDS=$(pgrep -f "python.*web_server.py")
+REMAINING_PIDS=$(pgrep -f "python.*src/web_server.py")
 if [ -n "$REMAINING_PIDS" ]; then
     echo "⚠️  Forcing shutdown..."
     for pid in $REMAINING_PIDS; do
@@ -143,7 +143,7 @@ if [ -n "$REMAINING_PIDS" ]; then
     sleep 1
     
     # Final verification
-    if pgrep -f "python.*web_server.py" > /dev/null; then
+    if pgrep -f "python.*src/web_server.py" > /dev/null; then
         echo "❌ Failed to stop web server"
         echo "Try: kill -9 $(pgrep -f web_server.py)"
         exit 1

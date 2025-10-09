@@ -4,13 +4,13 @@
 <dict>
     <!-- Service identifier -->
     <key>Label</key>
-    <string>com.chronometry.webserver</string>
+    <string>com.chronometry.menubar</string>
     
     <!-- Program to run -->
     <key>ProgramArguments</key>
     <array>
         <string>/Users/pkasinathan/workspace/chronometry/venv/bin/python</string>
-        <string>/Users/pkasinathan/workspace/chronometry/web_server.py</string>
+        <string>/Users/pkasinathan/workspace/chronometry/src/menubar_app.py</string>
     </array>
     
     <!-- Working directory -->
@@ -36,11 +36,14 @@
     
     <!-- Standard output log -->
     <key>StandardOutPath</key>
-    <string>/Users/pkasinathan/workspace/chronometry/logs/webserver.log</string>
+    <string>/Users/pkasinathan/workspace/chronometry/logs/menubar.log</string>
     
     <!-- Standard error log -->
     <key>StandardErrorPath</key>
-    <string>/Users/pkasinathan/workspace/chronometry/logs/webserver.error.log</string>
+    <string>/Users/pkasinathan/workspace/chronometry/logs/menubar.error.log</string>
+    
+    <!-- Note: Paths are absolute and remain unchanged -->
+    <!-- Scripts now in bin/, config in config/, Python modules at root -->
     
     <!-- Environment variables -->
     <key>EnvironmentVariables</key>
@@ -48,6 +51,14 @@
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
+    
+    <!-- Process type - needed for GUI apps on macOS -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    
+    <!-- Run in user session (required for menu bar apps) -->
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
     
     <!-- Run as user (not root) -->
     <key>UserName</key>

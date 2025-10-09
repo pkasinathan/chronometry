@@ -52,10 +52,12 @@ NC='\033[0m' # No Color
 
 # Paths
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"  # Parent of bin/ directory
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+CONFIG_DIR="$PROJECT_ROOT/config"
 WEBSERVER_PLIST="com.chronometry.webserver.plist"
 MENUBAR_PLIST="com.chronometry.menubar.plist"
-LOGS_DIR="$SCRIPT_DIR/logs"
+LOGS_DIR="$PROJECT_ROOT/logs"
 
 # Ensure logs directory exists
 mkdir -p "$LOGS_DIR"
@@ -97,19 +99,19 @@ install_services() {
         print_info "Created $LAUNCH_AGENTS_DIR"
     fi
     
-    # Copy plist files
-    if [ -f "$SCRIPT_DIR/$WEBSERVER_PLIST" ]; then
-        cp "$SCRIPT_DIR/$WEBSERVER_PLIST" "$LAUNCH_AGENTS_DIR/"
+    # Copy plist files from config directory
+    if [ -f "$CONFIG_DIR/$WEBSERVER_PLIST" ]; then
+        cp "$CONFIG_DIR/$WEBSERVER_PLIST" "$LAUNCH_AGENTS_DIR/"
         print_success "Installed web server service"
     else
-        print_error "Web server plist not found: $SCRIPT_DIR/$WEBSERVER_PLIST"
+        print_error "Web server plist not found: $CONFIG_DIR/$WEBSERVER_PLIST"
     fi
     
-    if [ -f "$SCRIPT_DIR/$MENUBAR_PLIST" ]; then
-        cp "$SCRIPT_DIR/$MENUBAR_PLIST" "$LAUNCH_AGENTS_DIR/"
+    if [ -f "$CONFIG_DIR/$MENUBAR_PLIST" ]; then
+        cp "$CONFIG_DIR/$MENUBAR_PLIST" "$LAUNCH_AGENTS_DIR/"
         print_success "Installed menu bar service"
     else
-        print_error "Menu bar plist not found: $SCRIPT_DIR/$MENUBAR_PLIST"
+        print_error "Menu bar plist not found: $CONFIG_DIR/$MENUBAR_PLIST"
     fi
     
     # Load services
