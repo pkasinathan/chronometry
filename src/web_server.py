@@ -46,7 +46,13 @@ def init_config():
     global config
     try:
         config = load_config()
-        logger.info("Configuration loaded successfully")
+        
+        # Convert relative paths to absolute (since we're in src/)
+        if 'root_dir' in config and not Path(config['root_dir']).is_absolute():
+            project_root = Path(__file__).parent.parent
+            config['root_dir'] = str(project_root / config['root_dir'])
+        
+        logger.info(f"Configuration loaded successfully. Root dir: {config.get('root_dir')}")
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")
         raise
@@ -565,8 +571,14 @@ def get_frame_image(date, timestamp):
     try:
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         root_dir = config['root_dir']
-        daily_dir = get_daily_dir(root_dir, date_obj)
         
+        # Convert to absolute path if relative
+        if not Path(root_dir).is_absolute():
+            # Since we're in src/, navigate to project root first
+            project_root = Path(__file__).parent.parent
+            root_dir = str(project_root / root_dir)
+        
+        daily_dir = get_daily_dir(root_dir, date_obj)
         image_path = daily_dir / f"{timestamp}.png"
         
         if not image_path.exists():
