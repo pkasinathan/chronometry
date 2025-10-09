@@ -180,6 +180,87 @@ def is_camera_in_use() -> bool:
         return False
 
 
+def capture_single_frame(config: dict, show_notifications: bool = True) -> bool:
+    """Capture a single screenshot immediately.
+    
+    Args:
+        config: Configuration dictionary
+        show_notifications: Whether to show notifications
+        
+    Returns:
+        True if capture succeeded, False otherwise
+    """
+    root_dir = config['root_dir']
+    capture_config = config['capture']
+    monitor_index = capture_config['monitor_index']
+    region = capture_config['region']
+    
+    try:
+        # Check if screen is locked
+        if is_screen_locked():
+            if show_notifications:
+                show_notification("Chronometry", "🔒 Screen is locked - skipping capture")
+            logger.info("Screen is locked - skipping capture")
+            return False
+        
+        # Check if camera is in use
+        if is_camera_in_use():
+            if show_notifications:
+                show_notification("Chronometry", "📹 Camera active - skipping for privacy")
+            logger.info("Camera is in use - skipping capture for privacy")
+            
+            # Create synthetic annotation
+            timestamp = datetime.now()
+            create_synthetic_annotation(
+                root_dir=root_dir,
+                timestamp=timestamp,
+                reason="camera_active",
+                summary="In a video meeting or call - screenshot skipped for privacy"
+            )
+            return False
+        
+        # Show notification before capture
+        if show_notifications:
+            show_notification("Chronometry", "📸 Capturing screenshot now...")
+        
+        # Capture screenshot
+        with mss.mss() as sct:
+            monitors = sct.monitors
+            
+            # Set capture region
+            try:
+                monitor = get_monitor_config(monitors, monitor_index, region)
+            except ValueError as e:
+                logger.error(f"Configuration error: {e}")
+                return False
+            
+            timestamp = datetime.now()
+            frame_path = get_frame_path(root_dir, timestamp)
+            
+            # Ensure directory exists
+            ensure_dir(frame_path.parent)
+            
+            # Take screenshot
+            screenshot = sct.grab(monitor)
+            
+            # Convert to PIL Image and save
+            img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
+            img.save(str(frame_path), "PNG")
+            
+            logger.info(f"Captured: {frame_path.name}")
+            
+            if show_notifications:
+                show_notification("Chronometry", f"✅ Screenshot saved: {frame_path.name}")
+            
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error capturing frame: {e}", exc_info=True)
+        if show_notifications:
+            show_notification("Chronometry", f"❌ Capture failed: {str(e)}")
+        return False
+
+
 def capture_screen(config: dict):
     """Capture screen based on configuration with error recovery."""
     capture_config = config['capture']

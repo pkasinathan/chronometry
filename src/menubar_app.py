@@ -9,8 +9,9 @@ from datetime import datetime
 from pathlib import Path
 import subprocess
 import webbrowser
+from pynput import keyboard
 
-from capture import capture_screen, show_notification, is_screen_locked, is_camera_in_use, create_synthetic_annotation
+from capture import capture_screen, capture_single_frame, show_notification, is_screen_locked, is_camera_in_use, create_synthetic_annotation
 from annotate import annotate_frames
 from timeline import generate_timeline
 from digest import generate_daily_digest
@@ -55,6 +56,7 @@ class ChronometryApp(rumps.App):
         self.skipped_locked = 0
         self.skipped_camera = 0
         self.start_time = None
+        self.manual_captures = 0
         
         # Setup menu
         self.setup_menu()
@@ -62,11 +64,15 @@ class ChronometryApp(rumps.App):
         # Set initial title/icon
         self.title = "⏱️"
         
+        # Setup global hotkey (Cmd+Shift+6)
+        self.setup_hotkey()
+        
     def setup_menu(self):
         """Setup the menu bar items."""
         self.menu = [
             rumps.MenuItem("Start Capture", callback=self.start_capture),
             rumps.MenuItem("Pause", callback=self.toggle_pause),
+            rumps.MenuItem("📸 Capture Now (⌘⇧6)", callback=self.capture_now),
             None,  # Separator
             rumps.MenuItem("Run Annotation Now", callback=self.run_annotation),
             rumps.MenuItem("Generate Timeline Now", callback=self.run_timeline),
@@ -355,6 +361,32 @@ class ChronometryApp(rumps.App):
                 except Exception as e:
                     logger.error(f"Digest generation failed: {e}")
     
+    def capture_now(self, _=None):
+        """Manually capture a screenshot immediately.
+        
+        Can be called from menu item or hotkey (pass _ for menu callback).
+        """
+        logger.info("Manual capture triggered...")
+        
+        def run():
+            try:
+                success = capture_single_frame(self.config, show_notifications=True)
+                if success:
+                    self.manual_captures += 1
+                    logger.info(f"Manual capture successful (total: {self.manual_captures})")
+                else:
+                    logger.warning("Manual capture was skipped (screen locked or camera active)")
+            except Exception as e:
+                logger.error(f"Manual capture failed: {e}")
+                rumps.notification(
+                    "Chronometry",
+                    "Capture Failed",
+                    f"Error: {str(e)}"
+                )
+        
+        # Run in background thread to not block UI
+        threading.Thread(target=run, daemon=True).start()
+    
     def run_annotation(self, _):
         """Manually trigger annotation."""
         logger.info("Manual annotation triggered...")
@@ -472,11 +504,39 @@ class ChronometryApp(rumps.App):
             f"Status: {status}\n"
             f"Uptime: {duration_str}\n"
             f"Frames Captured: {self.capture_count}\n"
+            f"Manual Captures: {self.manual_captures}\n"
             f"Skipped (Locked): {self.skipped_locked}\n"
             f"Skipped (Camera): {self.skipped_camera}\n"
         )
         
         rumps.alert("Chronometry Statistics", message)
+    
+    def setup_hotkey(self):
+        """Setup global hotkey listener for Cmd+Shift+6."""
+        def on_activate():
+            """Callback when hotkey is pressed."""
+            logger.info("Hotkey Cmd+Shift+6 pressed - triggering capture")
+            self.capture_now()
+        
+        # Define the hotkey combination: Cmd+Shift+6
+        hotkey = keyboard.HotKey(
+            keyboard.HotKey.parse('<cmd>+<shift>+6'),
+            on_activate
+        )
+        
+        def for_canonical(f):
+            """Helper to convert key to canonical form."""
+            return lambda k: f(keyboard_listener.canonical(k))
+        
+        # Create keyboard listener
+        keyboard_listener = keyboard.Listener(
+            on_press=for_canonical(hotkey.press),
+            on_release=for_canonical(hotkey.release)
+        )
+        
+        # Start listener in daemon thread
+        keyboard_listener.start()
+        logger.info("Global hotkey registered: Cmd+Shift+6 for Capture Now")
     
     def quit_app(self, _):
         """Quit the application - stop the service."""
