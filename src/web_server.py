@@ -101,16 +101,21 @@ def get_config():
 
 @app.route('/api/config', methods=['PUT'])
 def update_config():
-    """Update configuration."""
+    """Update configuration while preserving comments and formatting."""
     try:
         updates = request.json
         
-        # Update config file
+        # Read the original file to preserve comments
+        config_path = 'config/config.yaml'
+        with open(config_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Parse the YAML to get structure
         import yaml
-        with open('config/config.yaml', 'r') as f:
+        with open(config_path, 'r') as f:
             current_config = yaml.safe_load(f)
         
-        # Apply updates (simple merge)
+        # Apply updates
         if 'capture' in updates:
             current_config['capture'].update(updates['capture'])
         if 'annotation' in updates:
@@ -122,9 +127,46 @@ def update_config():
                 current_config['digest'] = {}
             current_config['digest'].update(updates['digest'])
         
-        # Save updated config
-        with open('config/config.yaml', 'w') as f:
-            yaml.dump(current_config, f, default_flow_style=False)
+        # Update only the values in the original file, preserving comments
+        import re
+        updated_lines = []
+        for line in lines:
+            updated_line = line
+            
+            # Update capture settings
+            if 'capture' in updates:
+                if re.match(r'^\s+fps:', line):
+                    updated_line = re.sub(r':\s*[\d.]+', f": {updates['capture'].get('fps', current_config['capture']['fps'])}", line)
+                elif re.match(r'^\s+monitor_index:', line):
+                    updated_line = re.sub(r':\s*\d+', f": {updates['capture'].get('monitor_index', current_config['capture']['monitor_index'])}", line)
+                elif re.match(r'^\s+retention_days:', line):
+                    updated_line = re.sub(r':\s*\d+', f": {updates['capture'].get('retention_days', current_config['capture']['retention_days'])}", line)
+            
+            # Update annotation settings
+            if 'annotation' in updates:
+                if re.match(r'^\s+batch_size:', line):
+                    updated_line = re.sub(r':\s*\d+', f": {updates['annotation'].get('batch_size', current_config['annotation']['batch_size'])}", line)
+            
+            # Update timeline settings
+            if 'timeline' in updates:
+                if re.match(r'^\s+bucket_minutes:', line):
+                    updated_line = re.sub(r':\s*\d+', f": {updates['timeline'].get('bucket_minutes', current_config['timeline']['bucket_minutes'])}", line)
+            
+            # Update digest settings
+            if 'digest' in updates:
+                if re.match(r'^\s+enabled:', line):
+                    updated_line = re.sub(r':\s*\w+', f": {str(updates['digest'].get('enabled', current_config['digest']['enabled'])).lower()}", line)
+                elif re.match(r'^\s+interval_seconds:', line):
+                    updated_line = re.sub(r':\s*\d+', f": {updates['digest'].get('interval_seconds', current_config['digest']['interval_seconds'])}", line)
+                elif re.match(r'^\s+ncp_project_id:', line):
+                    value = updates['digest'].get('ncp_project_id', current_config['digest']['ncp_project_id'])
+                    updated_line = re.sub(r':\s*"?[\w-]+"?', f': "{value}"', line)
+            
+            updated_lines.append(updated_line)
+        
+        # Save updated config with comments preserved
+        with open(config_path, 'w') as f:
+            f.writelines(updated_lines)
         
         # Reload config
         init_config()
