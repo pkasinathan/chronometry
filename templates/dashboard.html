@@ -666,6 +666,199 @@
             margin: 0;
             padding-left: 36px;
         }
+        
+        /* Settings Containers */
+        .settings-container {
+            background: #0a0a0a;
+            border: 1px solid #2a2a2a;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        
+        .settings-container:hover {
+            border-color: #333;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .settings-container-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 20px 24px;
+            background: linear-gradient(135deg, #141414 0%, #0f0f0f 100%);
+            border-bottom: 1px solid #2a2a2a;
+        }
+        
+        .settings-container-icon {
+            font-size: 24px;
+        }
+        
+        .settings-container-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            margin: 0;
+        }
+        
+        .settings-container-body {
+            padding: 24px;
+            display: grid;
+            gap: 20px;
+        }
+        
+        .settings-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .settings-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #e5e5e5;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .settings-input {
+            padding: 12px 16px;
+            background: #141414;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 14px;
+            max-width: 400px;
+            transition: all 0.2s;
+        }
+        
+        .settings-input:focus {
+            outline: none;
+            border-color: #E50914;
+            background: #1a1a1a;
+        }
+        
+        .settings-input:hover {
+            border-color: #333;
+        }
+        
+        .settings-hint {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.5;
+        }
+        
+        .settings-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #e5e5e5;
+        }
+        
+        .settings-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #E50914;
+        }
+        
+        /* Inline Activity Details */
+        .activity-details {
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            padding: 20px;
+            margin-top: -12px;
+            margin-bottom: 12px;
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+                padding: 0 20px;
+            }
+            to {
+                opacity: 1;
+                max-height: 1000px;
+                padding: 20px;
+            }
+        }
+        
+        .activity-details-header {
+            display: flex;
+            gap: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #222;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #b3b3b3;
+            flex-wrap: wrap;
+        }
+        
+        .activity-details-header strong {
+            color: #8c8c8c;
+            font-weight: 600;
+        }
+        
+        .activity-details-summary {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #e5e5e5;
+            margin-bottom: 20px;
+        }
+        
+        .activity-details-summary strong {
+            color: #E50914;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .activity-details-images {
+            margin-top: 20px;
+        }
+        
+        .activity-frames-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .activity-frame-image {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #2a2a2a;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .activity-frame-image:hover {
+            border-color: #E50914;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3);
+        }
+        
+        .activity-details-loading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .activity-details-loading .loading-spinner {
+            width: 20px;
+            height: 20px;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -823,16 +1016,42 @@
                     
                     <div v-else-if="timelineActivities.length > 0">
                         <div class="activity-list">
-                            <div v-for="activity in timelineActivities" :key="activity.start_time"
-                                 class="activity-item"
-                                 :style="{ '--activity-color': activity.color }"
-                                 @click="openActivityModal(activity)">
-                                <div class="activity-icon">[[ activity.icon ]]</div>
-                                <div class="activity-content">
-                                    <div class="activity-title">[[ activity.category ]]</div>
-                                    <div class="activity-summary">[[ activity.summary ]]</div>
+                            <div v-for="(activity, index) in timelineActivities" :key="activity.start_time">
+                                <div class="activity-item"
+                                     :style="{ '--activity-color': activity.color }"
+                                     @click="toggleActivityExpand(index)">
+                                    <div class="activity-icon">[[ activity.icon ]]</div>
+                                    <div class="activity-content">
+                                        <div class="activity-title">[[ activity.category ]]</div>
+                                        <div class="activity-summary">[[ activity.summary ]]</div>
+                                    </div>
+                                    <div class="activity-time">[[ formatTime(activity.start_time) ]] - [[ formatDuration(activity.duration_minutes) ]]</div>
                                 </div>
-                                <div class="activity-time">[[ formatTime(activity.start_time) ]] - [[ formatDuration(activity.duration_minutes) ]]</div>
+                                
+                                <!-- Expanded inline details -->
+                                <div v-if="expandedActivity === index" class="activity-details">
+                                    <div class="activity-details-header">
+                                        <span><strong>Category:</strong> [[ activity.category ]]</span>
+                                        <span><strong>Date:</strong> [[ formatDateTime(activity.start_time) ]]</span>
+                                        <span><strong>Duration:</strong> [[ formatDuration(activity.duration_minutes) ]]</span>
+                                    </div>
+                                    <div class="activity-details-summary">
+                                        <strong>Summary:</strong> [[ activity.summary ]]
+                                    </div>
+                                    <div v-if="activityFrames.length > 0" class="activity-details-images">
+                                        <div class="activity-frames-grid">
+                                            <img v-for="frame in activityFrames" :key="frame.timestamp"
+                                                 :src="getFrameImageUrl(frame)"
+                                                 :alt="frame.timestamp"
+                                                 class="activity-frame-image"
+                                                 @click="viewFrameFullSize(frame)">
+                                        </div>
+                                    </div>
+                                    <div v-else-if="loadingFrames" class="activity-details-loading">
+                                        <div class="loading-spinner"></div>
+                                        <span>Loading screenshots...</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -858,6 +1077,13 @@
                     
                     <div class="chart-container">
                         <canvas id="focusChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title">API Token Usage</h2>
+                    <div class="chart-container">
+                        <canvas id="tokenChart"></canvas>
                     </div>
                 </div>
                 
@@ -909,8 +1135,7 @@
                         <div class="activity-list">
                             <div v-for="result in searchResults" :key="result.start_time"
                                  class="activity-item"
-                                 :style="{ '--activity-color': result.color }"
-                                 @click="openActivityModal(result)">
+                                 :style="{ '--activity-color': result.color }">
                                 <div class="activity-icon">[[ result.icon ]]</div>
                                 <div class="activity-content">
                                     <div class="activity-title">[[ result.category ]] - [[ result.date ]]</div>
@@ -932,72 +1157,127 @@
             <div v-show="activeTab === 'settings'">
                 <div class="section">
                     <div class="section-header">
-                        <h2 class="section-title">Configuration Settings</h2>
+                        <h2 class="section-title">⚙️ Configuration Settings</h2>
                         <button class="btn btn-primary" @click="saveSettings">💾 Save Changes</button>
                     </div>
                     
-                    <div style="display: grid; gap: 24px;">
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Capture FPS</label>
-                            <input type="number" v-model.number="settings.capture.fps" step="0.001" 
-                                   class="search-input" style="max-width: 300px;">
-                            <div style="margin-top: 4px; font-size: 12px; color: #666;">
-                                Current: 1 frame every [[ Math.round(1 / settings.capture.fps) ]] seconds
+                    <div style="display: grid; gap: 20px;">
+                        <!-- Capture Settings Container -->
+                        <div class="settings-container">
+                            <div class="settings-container-header">
+                                <span class="settings-container-icon">📸</span>
+                                <h3 class="settings-container-title">Capture Settings</h3>
+                            </div>
+                            <div class="settings-container-body">
+                                <div class="settings-field">
+                                    <label class="settings-label">Capture FPS</label>
+                                    <input type="number" v-model.number="settings.capture.fps" step="0.001" 
+                                           class="settings-input">
+                                    <div class="settings-hint">
+                                        Current: 1 frame every [[ Math.round(1 / settings.capture.fps) ]] seconds
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-label">Monitor Index</label>
+                                    <input type="number" v-model.number="settings.capture.monitor_index" 
+                                           class="settings-input">
+                                    <div class="settings-hint">
+                                        Which monitor to capture (0 = all monitors, 1+ = specific monitor)
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-label">Retention Days</label>
+                                    <input type="number" v-model.number="settings.capture.retention_days" 
+                                           class="settings-input">
+                                    <div class="settings-hint">
+                                        Number of days to keep screenshots before auto-deletion
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Monitor Index</label>
-                            <input type="number" v-model.number="settings.capture.monitor_index" 
-                                   class="search-input" style="max-width: 300px;">
-                        </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Retention Days</label>
-                            <input type="number" v-model.number="settings.capture.retention_days" 
-                                   class="search-input" style="max-width: 300px;">
-                        </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Annotation Batch Size</label>
-                            <input type="number" v-model.number="settings.annotation.batch_size" 
-                                   class="search-input" style="max-width: 300px;">
-                        </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Timeline Bucket Minutes</label>
-                            <input type="number" v-model.number="settings.timeline.bucket_minutes" 
-                                   class="search-input" style="max-width: 300px;">
-                        </div>
-                        
-                        <h3 style="margin-top: 32px; margin-bottom: 16px; font-size: 16px; color: #ffffff;">Digest Settings</h3>
-                        
-                        <div>
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                <input type="checkbox" v-model="settings.digest.enabled" style="width: 20px; height: 20px;">
-                                <span style="color: #e5e5e5; font-size: 14px;">Enable Automatic Digest Generation</span>
-                            </label>
-                            <div style="margin-top: 4px; margin-left: 32px; font-size: 12px; color: #666;">
-                                When enabled, digest_scheduler.py automatically generates daily summaries
+                        <!-- Annotation Settings Container -->
+                        <div class="settings-container">
+                            <div class="settings-container-header">
+                                <span class="settings-container-icon">🤖</span>
+                                <h3 class="settings-container-title">Annotation Settings</h3>
+                            </div>
+                            <div class="settings-container-body">
+                                <div class="settings-field">
+                                    <label class="settings-label">Batch Size</label>
+                                    <input type="number" v-model.number="settings.annotation.batch_size" 
+                                           class="settings-input">
+                                    <div class="settings-hint">
+                                        Number of images to process per Metatron API request
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div style="margin-top: 20px;">
-                            <label style="display: block; margin-bottom: 8px; color: #8c8c8c; font-size: 13px;">Generation Interval (seconds)</label>
-                            <input type="number" v-model.number="settings.digest.interval_seconds" 
-                                   class="search-input" style="max-width: 300px;">
-                            <div style="margin-top: 4px; font-size: 12px; color: #666;">
-                                Current: Generate every [[ Math.round(settings.digest.interval_seconds / 60) ]] minutes
+                        <!-- Timeline Settings Container -->
+                        <div class="settings-container">
+                            <div class="settings-container-header">
+                                <span class="settings-container-icon">📅</span>
+                                <h3 class="settings-container-title">Timeline Settings</h3>
+                            </div>
+                            <div class="settings-container-body">
+                                <div class="settings-field">
+                                    <label class="settings-label">Bucket Minutes</label>
+                                    <input type="number" v-model.number="settings.timeline.bucket_minutes" 
+                                           class="settings-input">
+                                    <div class="settings-hint">
+                                        Time window for grouping similar activities together
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div style="margin-top: 20px;">
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                <input type="checkbox" v-model="settings.digest.auto_regenerate" style="width: 20px; height: 20px;">
-                                <span style="color: #e5e5e5; font-size: 14px;">Auto-regenerate on New Activity</span>
-                            </label>
-                            <div style="margin-top: 4px; margin-left: 32px; font-size: 12px; color: #666;">
-                                Automatically regenerate digest when new frames are detected
+                        <!-- Digest Settings Container -->
+                        <div class="settings-container">
+                            <div class="settings-container-header">
+                                <span class="settings-container-icon">📋</span>
+                                <h3 class="settings-container-title">Digest Settings</h3>
+                            </div>
+                            <div class="settings-container-body">
+                                <div class="settings-field">
+                                    <label class="settings-checkbox-label">
+                                        <input type="checkbox" v-model="settings.digest.enabled" class="settings-checkbox">
+                                        <span>Enable Automatic Digest Generation</span>
+                                    </label>
+                                    <div class="settings-hint">
+                                        When enabled, digest_scheduler.py automatically generates daily summaries
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-label">Generation Interval (seconds)</label>
+                                    <input type="number" v-model.number="settings.digest.interval_seconds" 
+                                           class="settings-input">
+                                    <div class="settings-hint">
+                                        Current: Generate every [[ Math.round(settings.digest.interval_seconds / 60) ]] minutes
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-label">NCP Project Name</label>
+                                    <input type="text" v-model="settings.digest.ncp_project_id" 
+                                           class="settings-input">
+                                    <div class="settings-hint">
+                                        Netflix Copilot Project ID used for digest generation API calls
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-checkbox-label">
+                                        <input type="checkbox" v-model="settings.digest.auto_regenerate" class="settings-checkbox">
+                                        <span>Auto-regenerate on New Activity</span>
+                                    </label>
+                                    <div class="settings-hint">
+                                        Automatically regenerate digest when new frames are detected
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1005,7 +1285,7 @@
                 
                 <div class="section">
                     <div class="section-header">
-                        <h2 class="section-title">Available Dates</h2>
+                        <h2 class="section-title">📅 Available Dates</h2>
                     </div>
                     
                     <div class="activity-list">
@@ -1022,56 +1302,6 @@
             </div>
         </div>
         
-        <!-- Activity Detail Modal -->
-        <div v-if="selectedActivity" class="modal-overlay" @click.self="closeModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <div>
-                        <div class="modal-title">[[ selectedActivity.icon ]] [[ selectedActivity.category ]]</div>
-                        <div style="color: #8c8c8c; font-size: 13px; margin-top: 4px;">
-                            [[ formatTime(selectedActivity.start_time) ]] - [[ formatDuration(selectedActivity.duration_minutes) ]]
-                        </div>
-                    </div>
-                    <button class="modal-close" @click="closeModal">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="modal-info">
-                        <div class="modal-info-row">
-                            <div class="modal-info-label">Category:</div>
-                            <div class="modal-info-value">[[ selectedActivity.category ]]</div>
-                        </div>
-                        <div class="modal-info-row">
-                            <div class="modal-info-label">Date:</div>
-                            <div class="modal-info-value">[[ selectedActivity.date || selectedDate ]]</div>
-                        </div>
-                        <div class="modal-info-row">
-                            <div class="modal-info-label">Duration:</div>
-                            <div class="modal-info-value">[[ formatDuration(selectedActivity.duration_minutes) ]]</div>
-                        </div>
-                        <div class="modal-info-row">
-                            <div class="modal-info-label">Summary:</div>
-                            <div class="modal-info-value">[[ selectedActivity.summary ]]</div>
-                        </div>
-                    </div>
-                    
-                    <div v-if="activityFrames.length > 0" class="modal-frames">
-                        <div class="modal-frames-title">Screenshots ([[ activityFrames.length ]] frames)</div>
-                        <div class="frames-grid">
-                            <img v-for="frame in activityFrames" :key="frame.timestamp"
-                                 :src="getFrameImageUrl(frame)"
-                                 :alt="frame.timestamp"
-                                 class="frame-thumbnail"
-                                 @click="viewFrameFullSize(frame)">
-                        </div>
-                    </div>
-                    
-                    <div v-else-if="loadingFrames" style="text-align: center; padding: 40px; color: #666;">
-                        <div class="loading-spinner" style="margin: 0 auto 16px;"></div>
-                        <div>Loading screenshots...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
     
     <script>
@@ -1126,7 +1356,8 @@
                             enabled: true,
                             interval_seconds: 3600,
                             active_hours: null,
-                            auto_regenerate: true
+                            auto_regenerate: true,
+                            ncp_project_id: 'prabhuai'
                         }
                     },
                     availableDates: [],
@@ -1134,8 +1365,10 @@
                     focusChart: null,
                     categoryChart: null,
                     hourlyChart: null,
+                    tokenChart: null,
                     searchTimeout: null,
                     selectedActivity: null,
+                    expandedActivity: null,
                     activityFrames: [],
                     loadingFrames: false
                 };
@@ -1251,6 +1484,7 @@
                         const data = await response.json();
                         
                         this.renderFocusChart(data.daily_stats);
+                        this.renderTokenChart(data.token_usage || []);
                         this.renderCategoryChart(data.category_breakdown);
                         this.renderHourlyChart(data.hourly_breakdown);
                     } catch (error) {
@@ -1295,6 +1529,67 @@
                             },
                             plugins: {
                                 legend: { labels: { color: '#ffffff' } }
+                            }
+                        }
+                    });
+                },
+                
+                renderTokenChart(tokenUsage) {
+                    const ctx = document.getElementById('tokenChart');
+                    if (!ctx) return;
+                    
+                    if (this.tokenChart) {
+                        this.tokenChart.destroy();
+                    }
+                    
+                    this.tokenChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: tokenUsage.map(d => d.date),
+                            datasets: [
+                                {
+                                    label: 'Digest Tokens',
+                                    data: tokenUsage.map(d => d.digest_tokens),
+                                    backgroundColor: '#E50914',
+                                    stack: 'stack0'
+                                },
+                                {
+                                    label: 'Annotation Tokens (Placeholder)',
+                                    data: tokenUsage.map(d => d.annotation_tokens),
+                                    backgroundColor: '#8c8c8c',
+                                    stack: 'stack0'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: { color: '#222' },
+                                    ticks: { color: '#8c8c8c' },
+                                    title: {
+                                        display: true,
+                                        text: 'Tokens Used',
+                                        color: '#8c8c8c'
+                                    }
+                                },
+                                x: {
+                                    grid: { color: '#222' },
+                                    ticks: { color: '#8c8c8c' }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: '#ffffff' } },
+                                tooltip: {
+                                    callbacks: {
+                                        footer: (tooltipItems) => {
+                                            const total = tooltipItems.reduce((sum, item) => sum + item.parsed.y, 0);
+                                            return 'Total: ' + total.toLocaleString() + ' tokens';
+                                        }
+                                    }
+                                }
                             }
                         }
                     });
@@ -1489,40 +1784,55 @@
                     });
                 },
                 
-                async openActivityModal(activity) {
-                    this.selectedActivity = activity;
-                    this.activityFrames = [];
-                    this.loadingFrames = true;
-                    
-                    try {
-                        // Load frames for this activity
-                        const date = activity.date || this.selectedDate;
-                        const response = await fetch(`/api/frames?date=${date}`);
-                        const data = await response.json();
+                formatDateTime(isoString) {
+                    const date = new Date(isoString);
+                    return date.toLocaleString('en-US', { 
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                },
+                
+                async toggleActivityExpand(index) {
+                    if (this.expandedActivity === index) {
+                        // Collapse
+                        this.expandedActivity = null;
+                        this.activityFrames = [];
+                    } else {
+                        // Expand
+                        this.expandedActivity = index;
+                        this.activityFrames = [];
+                        this.loadingFrames = true;
                         
-                        // Filter frames within activity time range
-                        const startTime = new Date(activity.start_time);
-                        const endTime = new Date(activity.end_time);
+                        const activity = this.timelineActivities[index];
                         
-                        this.activityFrames = data.frames.filter(frame => {
-                            const frameTime = new Date(frame.datetime);
-                            return frameTime >= startTime && frameTime <= endTime;
-                        });
-                    } catch (error) {
-                        console.error('Error loading frames:', error);
-                    } finally {
-                        this.loadingFrames = false;
+                        try {
+                            // Load frames for this activity
+                            const date = activity.date || this.selectedDate;
+                            const response = await fetch(`/api/frames?date=${date}`);
+                            const data = await response.json();
+                            
+                            // Filter frames within activity time range
+                            const startTime = new Date(activity.start_time);
+                            const endTime = new Date(activity.end_time);
+                            
+                            this.activityFrames = data.frames.filter(frame => {
+                                const frameTime = new Date(frame.datetime);
+                                return frameTime >= startTime && frameTime <= endTime;
+                            });
+                        } catch (error) {
+                            console.error('Error loading frames:', error);
+                        } finally {
+                            this.loadingFrames = false;
+                        }
                     }
                 },
                 
-                closeModal() {
-                    this.selectedActivity = null;
-                    this.activityFrames = [];
-                },
-                
                 getFrameImageUrl(frame) {
-                    const date = this.selectedActivity.date || this.selectedDate;
-                    return `/api/frames/${date}/${frame.timestamp}/image`;
+                    return `/api/frames/${this.selectedDate}/${frame.timestamp}/image`;
                 },
                 
                 viewFrameFullSize(frame) {

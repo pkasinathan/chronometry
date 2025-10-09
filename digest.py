@@ -5,11 +5,12 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from collections import defaultdict
 
 from common import load_config, get_daily_dir
 from timeline import load_annotations, group_activities, calculate_stats
+from token_usage import TokenUsageTracker
 
 # Configure logging
 logging.basicConfig(
@@ -19,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def call_copilot_api(prompt: str, max_tokens: int = 500) -> str:
+def call_copilot_api(prompt: str, config: dict, max_tokens: int = 500, context: str = None) -> str:
     """Call the Copilot API for text generation."""
     try:
         json_payload = {
@@ -39,7 +40,7 @@ def call_copilot_api(prompt: str, max_tokens: int = 500) -> str:
         }
         
         # Get NCP project ID from config or use default
-        ncp_project_id = "prabhuai"
+        ncp_project_id = config.get('digest', {}).get('ncp_project_id', 'prabhuai')
         
         # Create the curl command
         cmd = [
@@ -65,21 +66,65 @@ def call_copilot_api(prompt: str, max_tokens: int = 500) -> str:
         # Parse the response
         response = json.loads(result.stdout)
         if "choices" in response and len(response["choices"]) > 0:
-            return response["choices"][0]["message"]["content"]
+            content = response["choices"][0]["message"]["content"]
+            
+            # Extract token usage if available
+            usage = response.get("usage", {})
+            tokens_used = usage.get("total_tokens", 0)
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            
+            # Log token usage
+            if tokens_used > 0:
+                tracker = TokenUsageTracker(config['root_dir'])
+                tracker.log_tokens(
+                    api_type='digest',
+                    tokens=tokens_used,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    context=context
+                )
+            
+            # Return content and token info
+            return {
+                "content": content,
+                "tokens": tokens_used,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens
+            }
         else:
             logger.error(f"Unexpected API response: {response}")
-            return "Error: Invalid API response"
+            return {
+                "content": "Error: Invalid API response",
+                "tokens": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0
+            }
             
     except subprocess.TimeoutExpired:
         logger.error("Copilot API call timed out")
-        return "Error: API timeout"
+        return {
+            "content": "Error: API timeout",
+            "tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0
+        }
     except Exception as e:
         logger.error(f"Error calling Copilot API: {e}")
-        return f"Error generating summary: {str(e)}"
+        return {
+            "content": f"Error generating summary: {str(e)}",
+            "tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0
+        }
 
 
-def generate_category_summaries(activities: List[Dict]) -> Dict[str, Dict]:
-    """Generate summaries for each activity category."""
+def generate_category_summaries(activities: List[Dict], config: dict) -> Tuple[Dict[str, Dict], int]:
+    """Generate summaries for each activity category.
+    
+    Returns:
+        tuple: (category_summaries dict, total_tokens_used int)
+    """
     # Group activities by category
     category_activities = defaultdict(list)
     category_duration = defaultdict(int)
@@ -96,6 +141,7 @@ def generate_category_summaries(activities: List[Dict]) -> Dict[str, Dict]:
     
     # Generate summary for each category
     category_summaries = {}
+    total_tokens = 0
     
     for category, activities_list in category_activities.items():
         # Prepare prompt for the category
@@ -113,21 +159,26 @@ def generate_category_summaries(activities: List[Dict]) -> Dict[str, Dict]:
 
 Provide a concise, professional summary."""
         
-        summary_text = call_copilot_api(prompt, max_tokens=200)
+        result = call_copilot_api(prompt, config, max_tokens=200, context=f"Category: {category}")
+        total_tokens += result['tokens']
         
         category_summaries[category] = {
-            'summary': summary_text,
+            'summary': result['content'],
             'count': len(activities_list),
             'duration_minutes': int(category_duration[category]),
             'icon': activities_list[0]['icon'],
             'color': activities_list[0]['color']
         }
     
-    return category_summaries
+    return category_summaries, total_tokens
 
 
-def generate_overall_summary(activities: List[Dict], stats: Dict) -> str:
-    """Generate an overall summary of the day."""
+def generate_overall_summary(activities: List[Dict], stats: Dict, config: dict) -> Tuple[str, int]:
+    """Generate an overall summary of the day.
+    
+    Returns:
+        tuple: (summary text, tokens_used int)
+    """
     # Prepare high-level information
     total_activities = len(activities)
     focus_percentage = stats['focus_percentage']
@@ -154,7 +205,8 @@ def generate_overall_summary(activities: List[Dict], stats: Dict) -> str:
 
 Create an engaging summary that highlights productivity and key focus areas."""
     
-    return call_copilot_api(prompt, max_tokens=300)
+    result = call_copilot_api(prompt, config, max_tokens=300, context="Overall summary")
+    return result['content'], result['tokens']
 
 
 def generate_daily_digest(date: datetime, config: dict) -> Dict:
@@ -194,12 +246,16 @@ def generate_daily_digest(date: datetime, config: dict) -> Dict:
     logger.info(f"Generating digest for {len(activities)} activities...")
     
     # Generate category summaries
-    category_summaries = generate_category_summaries(activities)
+    category_summaries, category_tokens = generate_category_summaries(activities, config)
     
     # Generate overall summary
-    overall_summary = generate_overall_summary(activities, stats)
+    overall_summary, overall_tokens = generate_overall_summary(activities, stats, config)
     
-    # Create digest
+    # Calculate total token usage
+    total_tokens = category_tokens + overall_tokens
+    logger.info(f"Digest generated using {total_tokens} tokens")
+    
+    # Create digest (no token_usage field - that's tracked separately now)
     digest = {
         'date': date.strftime('%Y-%m-%d'),
         'overall_summary': overall_summary,

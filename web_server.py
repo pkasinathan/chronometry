@@ -19,6 +19,7 @@ from PIL import Image
 from common import load_config, get_daily_dir, get_frame_path
 from timeline import load_annotations, categorize_activity, group_activities, calculate_stats
 from digest import get_or_generate_digest
+from token_usage import TokenUsageTracker
 
 # Configure logging
 logging.basicConfig(
@@ -83,7 +84,8 @@ def get_config():
             'enabled': config.get('digest', {}).get('enabled', True),
             'interval_seconds': config.get('digest', {}).get('interval_seconds', 3600),
             'active_hours': config.get('digest', {}).get('active_hours', None),
-            'auto_regenerate': config.get('digest', {}).get('auto_regenerate', True)
+            'auto_regenerate': config.get('digest', {}).get('auto_regenerate', True),
+            'ncp_project_id': config.get('digest', {}).get('ncp_project_id', 'prabhuai')
         }
     })
 
@@ -358,6 +360,7 @@ def get_analytics():
         daily_stats = []
         category_totals = defaultdict(int)
         hourly_activity = defaultdict(int)
+        token_usage_data = []
         
         for i in range(days):
             date = datetime.now() - timedelta(days=i)
@@ -389,6 +392,20 @@ def get_analytics():
                 # Hourly distribution
                 hour = activity['start_time'].hour
                 hourly_activity[hour] += duration
+            
+            # Get token usage from separate token tracking
+            try:
+                tracker = TokenUsageTracker(root_dir)
+                usage = tracker.get_daily_usage(date)
+                if usage['total_tokens'] > 0:
+                    token_usage_data.append({
+                        'date': date.strftime('%Y-%m-%d'),
+                        'digest_tokens': usage['by_type'].get('digest', 0),
+                        'annotation_tokens': usage['by_type'].get('annotation', 0),
+                        'total_tokens': usage['total_tokens']
+                    })
+            except Exception as e:
+                logger.warning(f"Error loading token usage for {date}: {e}")
         
         # Convert to lists for JSON
         category_breakdown = [
@@ -401,10 +418,14 @@ def get_analytics():
             for h in range(24)
         ]
         
+        # Sort token usage data by date
+        token_usage_data.sort(key=lambda x: x['date'])
+        
         return jsonify({
             'daily_stats': daily_stats,
             'category_breakdown': category_breakdown,
-            'hourly_breakdown': hourly_breakdown
+            'hourly_breakdown': hourly_breakdown,
+            'token_usage': token_usage_data
         })
     except Exception as e:
         logger.error(f"Error getting analytics: {e}")

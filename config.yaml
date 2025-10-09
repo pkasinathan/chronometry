@@ -55,6 +55,10 @@ digest:
   # Used by menubar_app.py and start_myworkanalyzer_agent.sh
   # 3600 = 1 hour, 1800 = 30 minutes, 900 = 15 minutes, 7200 = 2 hours
   interval_seconds: 3600
+  
+  # NCP (Netflix Copilot) Project Name
+  # Used for Copilot API calls in digest generation
+  ncp_project_id: "prabhuai"
 
 # Visualization settings - used by timeline.py
 timeline:

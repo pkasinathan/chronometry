@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import webbrowser
 
-from capture import capture_screen, show_notification, is_screen_locked
+from capture import capture_screen, show_notification, is_screen_locked, is_camera_in_use, create_synthetic_annotation
 from annotate import annotate_frames
 from timeline import generate_timeline
 from digest import generate_daily_digest
@@ -53,6 +53,7 @@ class ChronometryApp(rumps.App):
         # Statistics
         self.capture_count = 0
         self.skipped_locked = 0
+        self.skipped_camera = 0
         self.start_time = None
         
         # Setup menu
@@ -126,6 +127,7 @@ class ChronometryApp(rumps.App):
         self.pause_event.clear()
         self.capture_count = 0
         self.skipped_locked = 0
+        self.skipped_camera = 0
         self.start_time = datetime.now()
         
         # Start capture thread
@@ -242,15 +244,31 @@ class ChronometryApp(rumps.App):
                     # Check if screen is locked
                     if is_screen_locked():
                         logger.info("🔒 Screen is locked - skipping capture")
+                        show_notification("Chronometry", "🔒 Screen locked - capture skipped")
                         self.skipped_locked += 1
                         time.sleep(sleep_interval)
                         continue
                     
+                    # Check if camera is in use (video calls, etc.)
+                    if is_camera_in_use():
+                        logger.info("📹 Camera is in use - skipping capture for privacy")
+                        show_notification("Chronometry", "📹 Camera active - capture skipped")
+                        
+                        # Create synthetic annotation to track the meeting time
+                        timestamp = datetime.now()
+                        create_synthetic_annotation(
+                            root_dir=root_dir,
+                            timestamp=timestamp,
+                            reason="camera_active",
+                            summary="In a video meeting or call - screenshot skipped for privacy"
+                        )
+                        
+                        self.skipped_camera += 1
+                        time.sleep(sleep_interval)
+                        continue
+                    
                     # Show notification before capture
-                    show_notification(
-                        "Chronometry",
-                        "📸 Capturing screenshot now..."
-                    )
+                    show_notification("Chronometry", "📸 Capturing screenshot now...")
                     
                     # Capture screenshot
                     timestamp = datetime.now()
@@ -444,32 +462,28 @@ class ChronometryApp(rumps.App):
             f"Uptime: {duration_str}\n"
             f"Frames Captured: {self.capture_count}\n"
             f"Skipped (Locked): {self.skipped_locked}\n"
+            f"Skipped (Camera): {self.skipped_camera}\n"
         )
         
         rumps.alert("Chronometry Statistics", message)
     
     def quit_app(self, _):
-        """Quit the application."""
+        """Quit the application - stop the service."""
+        logger.info("Quit clicked - stopping service")
+        
+        # Stop capture if running
         if self.is_running:
-            response = rumps.alert(
-                "Quit Chronometry?",
-                "Capture is currently running. Are you sure you want to quit?",
-                ok="Quit",
-                cancel="Cancel"
-            )
-            
-            if response == 1:  # OK was clicked
-                logger.info("User confirmed quit, stopping capture...")
+            try:
                 self._stop_capture()
-                logger.info("Capture stopped, quitting application...")
-                rumps.quit_application()
-                # Force exit the Python process to ensure clean shutdown
-                sys.exit(0)
-        else:
-            logger.info("Quitting application...")
-            rumps.quit_application()
-            # Force exit the Python process to ensure clean shutdown
-            sys.exit(0)
+            except:
+                pass
+        
+        # Stop the service (same command as manage_services.sh stop)
+        subprocess.run(['launchctl', 'stop', 'com.chronometry.menubar'])
+        logger.info("Service stopped")
+        
+        # Exit
+        sys.exit(0)
 
 
 def main():

@@ -7,6 +7,7 @@ ENV/
 # Data directories (contains screenshots and annotations)
 data/
 output/
+.playwright-mcp/
 
 # Python artifacts
 __pycache__/

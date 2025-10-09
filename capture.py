@@ -70,6 +70,115 @@ def is_screen_locked() -> bool:
         return False
 
 
+def create_synthetic_annotation(root_dir: str, timestamp: datetime, reason: str, summary: str):
+    """Create a synthetic annotation when capture is skipped.
+    
+    Args:
+        root_dir: Root directory for data
+        timestamp: Timestamp for the annotation
+        reason: Reason for skipping (e.g., 'camera', 'locked')
+        summary: Human-readable summary
+    """
+    from common import get_frame_path, ensure_dir
+    from pathlib import Path
+    import json
+    
+    try:
+        # Get the path where the screenshot would have been
+        frame_path = get_frame_path(root_dir, timestamp)
+        ensure_dir(frame_path.parent)
+        
+        # Create JSON annotation file (without the PNG)
+        json_path = frame_path.with_suffix('.json')
+        
+        annotation = {
+            "timestamp": timestamp.isoformat(),
+            "summary": summary,
+            "image_file": None,  # No screenshot taken
+            "synthetic": True,
+            "reason": reason
+        }
+        
+        with open(json_path, 'w') as f:
+            json.dump(annotation, f, indent=2)
+        
+        logger.info(f"Synthetic annotation created: {summary}")
+    except Exception as e:
+        logger.warning(f"Failed to create synthetic annotation: {e}")
+
+
+def is_camera_in_use() -> bool:
+    """Check if camera is currently in use (video calls, etc.).
+    
+    Checks macOS Control Center camera indicator (the green icon in menubar).
+    """
+    try:
+        # MOST ACCURATE: Check for camera indicator in Control Center
+        # When camera is in use, macOS shows a green camera icon in the menubar
+        # This is managed by the Control Center process
+        
+        # Check system logs for camera streaming
+        result = subprocess.run(
+            ['log', 'show', '--predicate', 'subsystem == "com.apple.cmio"', '--last', '5s', '--info'],
+            capture_output=True,
+            text=True,
+            timeout=3
+        )
+        
+        # Look for active streaming indicators
+        if 'Starting' in result.stdout or 'stream' in result.stdout.lower():
+            logger.info("📹 Camera detected in use via system logs")
+            return True
+        
+        # Method 2: Check ioreg for camera interface (works for native apps)
+        ioreg_result = subprocess.run(
+            ['ioreg', '-r', '-n', 'AppleCameraInterface', '-w', '0'],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        
+        # When camera LED is on, IOUserClientCreator will be present
+        if 'IOUserClientCreator' in ioreg_result.stdout:
+            logger.info("📹 Camera detected in use via ioreg")
+            return True
+        
+        # Method 3: Check for camera framework usage by Chrome
+        # If Chrome has CMIO (CoreMediaIO) files open, camera might be active
+        lsof_result = subprocess.run(
+            ['sh', '-c', 'lsof -c "Google Chrome Helper" 2>/dev/null | grep -c CMIO'],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        
+        try:
+            cmio_count = int(lsof_result.stdout.strip())
+            # If Chrome has multiple CMIO files open (>5), camera is likely active
+            if cmio_count > 5:
+                logger.info(f"📹 Camera detected in use via Chrome CMIO ({cmio_count} files)")
+                return True
+        except:
+            pass
+        
+        # Method 4: Check for FaceTime
+        facetime_check = subprocess.run(
+            ['pgrep', '-x', 'FaceTime'],
+            capture_output=True,
+            timeout=1
+        )
+        if facetime_check.returncode == 0:
+            logger.info("📹 Camera likely in use via FaceTime")
+            return True
+        
+        return False
+        
+    except Exception as e:
+        logger.debug(f"Camera detection failed: {e}")
+        # If we can't determine, assume camera is NOT in use
+        return False
+
+
 def capture_screen(config: dict):
     """Capture screen based on configuration with error recovery."""
     capture_config = config['capture']
@@ -93,7 +202,7 @@ def capture_screen(config: dict):
     
     # Show initial notification warning
     show_notification(
-        "MyWorkAnalyzer Starting",
+        "Chronometry Starting",
         "Screen capture will begin in 5 seconds. Hide any sensitive data.",
         sound=True
     )
@@ -132,15 +241,30 @@ def capture_screen(config: dict):
                     # Check if screen is locked
                     if is_screen_locked():
                         logger.info("🔒 Screen is locked - skipping capture")
+                        show_notification("Chronometry", "🔒 Screen locked - capture skipped")
                         skipped_locked += 1
                         time.sleep(sleep_interval)
                         continue
                     
+                    # Check if camera is in use (video calls, etc.)
+                    if is_camera_in_use():
+                        logger.info("📹 Camera is in use - skipping capture for privacy")
+                        show_notification("Chronometry", "📹 Camera active - capture skipped")
+                        
+                        # Create synthetic annotation to track the meeting time
+                        timestamp = datetime.now()
+                        create_synthetic_annotation(
+                            root_dir=root_dir,
+                            timestamp=timestamp,
+                            reason="camera_active",
+                            summary="In a video meeting or call - screenshot skipped for privacy"
+                        )
+                        
+                        time.sleep(sleep_interval)
+                        continue
+                    
                     # Show notification before capture
-                    show_notification(
-                        "MyWorkAnalyzer",
-                        "📸 Capturing screenshot now..."
-                    )
+                    show_notification("Chronometry", "📸 Capturing screenshot now...")
                     
                     # Capture screenshot
                     timestamp = datetime.now()
