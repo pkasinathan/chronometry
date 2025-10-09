@@ -29,7 +29,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize Flask app
-app = Flask(__name__)
+# Since we're in src/, templates are in ../templates
+import os
+template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
+app = Flask(__name__, template_folder=template_dir)
 app.config['SECRET_KEY'] = 'chronometry-secret-key-2025'
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
