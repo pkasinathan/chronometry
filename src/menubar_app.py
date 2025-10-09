@@ -390,56 +390,51 @@ class ChronometryApp(rumps.App):
     def run_annotation(self, _):
         """Manually trigger annotation."""
         logger.info("Manual annotation triggered...")
-        rumps.notification(
+        show_notification(
             "Chronometry",
-            "Running Annotation",
-            "Processing captured frames..."
+            "Running Annotation - Processing captured frames..."
         )
         
         def run():
             try:
                 annotate_frames(self.config)
-                rumps.notification(
+                show_notification(
                     "Chronometry",
-                    "Annotation Complete",
-                    "Frames have been annotated successfully."
+                    "✅ Annotation Complete - Frames annotated successfully"
                 )
             except Exception as e:
                 logger.error(f"Annotation failed: {e}")
-                rumps.alert("Annotation Error", str(e))
+                show_notification("Chronometry", f"❌ Annotation Error: {str(e)}")
         
         threading.Thread(target=run, daemon=True).start()
     
     def run_timeline(self, _):
         """Manually trigger timeline generation."""
         logger.info("Manual timeline generation triggered...")
-        rumps.notification(
+        show_notification(
             "Chronometry",
-            "Generating Timeline",
-            "Creating timeline visualization..."
+            "Generating Timeline - Creating visualization..."
         )
         
         def run():
             try:
                 generate_timeline(self.config)
-                rumps.notification(
+                show_notification(
                     "Chronometry",
-                    "Timeline Generated",
-                    "Timeline is ready to view."
+                    "✅ Timeline Generated - Ready to view"
                 )
             except Exception as e:
                 logger.error(f"Timeline generation failed: {e}")
-                rumps.alert("Timeline Error", str(e))
+                show_notification("Chronometry", f"❌ Timeline Error: {str(e)}")
         
         threading.Thread(target=run, daemon=True).start()
     
     def run_digest(self, _):
         """Manually trigger digest generation."""
         logger.info("Manual digest generation triggered...")
-        rumps.notification(
+        show_notification(
             "Chronometry",
-            "Generating Digest",
-            "Creating AI-powered daily summary..."
+            "Generating Digest - Creating AI summary..."
         )
         
         def run():
@@ -447,16 +442,15 @@ class ChronometryApp(rumps.App):
                 today = datetime.now()
                 digest = generate_daily_digest(today, self.config)
                 if 'error' not in digest:
-                    rumps.notification(
+                    show_notification(
                         "Chronometry",
-                        "Digest Generated",
-                        f"Daily summary created: {digest['total_activities']} activities"
+                        f"✅ Digest Generated - {digest['total_activities']} activities summarized"
                     )
                 else:
-                    rumps.alert("Digest Error", digest['error'])
+                    show_notification("Chronometry", f"⚠️ Digest Error: {digest['error']}")
             except Exception as e:
                 logger.error(f"Digest generation failed: {e}")
-                rumps.alert("Digest Error", str(e))
+                show_notification("Chronometry", f"❌ Digest Error: {str(e)}")
         
         threading.Thread(target=run, daemon=True).start()
     
