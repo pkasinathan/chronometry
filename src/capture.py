@@ -180,6 +180,110 @@ def is_camera_in_use() -> bool:
         return False
 
 
+def capture_region_interactive(config: dict, show_notifications: bool = True) -> bool:
+    """Capture screenshot with interactive region selection.
+    
+    Uses macOS screencapture -i for native region selection UI.
+    User can select a region, window, or press Esc to cancel.
+    
+    Args:
+        config: Configuration dictionary
+        show_notifications: Whether to show notifications
+        
+    Returns:
+        True if capture succeeded, False if cancelled or failed
+    """
+    import tempfile
+    import os
+    from pathlib import Path
+    
+    root_dir = config['root_dir']
+    
+    try:
+        # Check if screen is locked
+        if is_screen_locked():
+            if show_notifications:
+                show_notification("Chronometry", "🔒 Screen is locked - skipping capture")
+            logger.info("Screen is locked - skipping capture")
+            return False
+        
+        # Check if camera is in use
+        if is_camera_in_use():
+            if show_notifications:
+                show_notification("Chronometry", "📹 Camera active - skipping for privacy")
+            logger.info("Camera is in use - skipping capture for privacy")
+            
+            # Create synthetic annotation
+            timestamp = datetime.now()
+            create_synthetic_annotation(
+                root_dir=root_dir,
+                timestamp=timestamp,
+                reason="camera_active",
+                summary="In a video meeting or call - screenshot skipped for privacy"
+            )
+            return False
+        
+        # Show notification about region selection
+        if show_notifications:
+            show_notification("Chronometry", "📸 Select region to capture (Esc to cancel)")
+        
+        # Create temporary file for screenshot
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.png')
+        os.close(temp_fd)  # Close file descriptor, screencapture will write to it
+        
+        try:
+            # Use macOS screencapture with interactive mode (-i)
+            # -i: interactive mode (allows user to select region/window)
+            result = subprocess.run(
+                ['screencapture', '-i', temp_path],
+                capture_output=True,
+                timeout=60  # 60 second timeout for user to select
+            )
+            
+            # Check if user cancelled (file won't be created or will be empty)
+            temp_file = Path(temp_path)
+            if not temp_file.exists() or temp_file.stat().st_size == 0:
+                logger.info("Region capture cancelled by user")
+                if show_notifications:
+                    show_notification("Chronometry", "❌ Region capture cancelled")
+                return False
+            
+            # Move to proper location with timestamp
+            timestamp = datetime.now()
+            frame_path = get_frame_path(root_dir, timestamp)
+            ensure_dir(frame_path.parent)
+            
+            # Move the temp file to final location
+            import shutil
+            shutil.move(temp_path, str(frame_path))
+            
+            logger.info(f"Captured region: {frame_path.name}")
+            
+            if show_notifications:
+                show_notification("Chronometry", f"✅ Region screenshot saved: {frame_path.name}")
+            
+            return True
+            
+        finally:
+            # Clean up temp file if it still exists
+            try:
+                if Path(temp_path).exists():
+                    os.unlink(temp_path)
+            except:
+                pass
+            
+    except subprocess.TimeoutExpired:
+        logger.warning("Region capture timed out")
+        if show_notifications:
+            show_notification("Chronometry", "⏱️ Region capture timed out")
+        return False
+    except Exception as e:
+        logger.error(f"Error capturing region: {e}", exc_info=True)
+        if show_notifications:
+            show_notification("Chronometry", f"❌ Capture failed: {str(e)}")
+        return False
+
+
 def capture_single_frame(config: dict, show_notifications: bool = True) -> bool:
     """Capture a single screenshot immediately.
     

@@ -11,7 +11,7 @@ import subprocess
 import webbrowser
 from pynput import keyboard
 
-from capture import capture_screen, capture_single_frame, show_notification, is_screen_locked, is_camera_in_use, create_synthetic_annotation
+from capture import capture_screen, capture_single_frame, capture_region_interactive, show_notification, is_screen_locked, is_camera_in_use, create_synthetic_annotation
 from annotate import annotate_frames
 from timeline import generate_timeline
 from digest import generate_daily_digest
@@ -387,6 +387,33 @@ class ChronometryApp(rumps.App):
         # Run in background thread to not block UI
         threading.Thread(target=run, daemon=True).start()
     
+    def capture_region_now(self, _=None):
+        """Manually capture a screenshot with region selection.
+        
+        Can be called from hotkey (pass _ for hotkey callback).
+        Uses macOS native region selection UI.
+        """
+        logger.info("Region capture triggered...")
+        
+        def run():
+            try:
+                success = capture_region_interactive(self.config, show_notifications=True)
+                if success:
+                    self.manual_captures += 1
+                    logger.info(f"Region capture successful (total: {self.manual_captures})")
+                else:
+                    logger.info("Region capture was cancelled or skipped")
+            except Exception as e:
+                logger.error(f"Region capture failed: {e}")
+                rumps.notification(
+                    "Chronometry",
+                    "Region Capture Failed",
+                    f"Error: {str(e)}"
+                )
+        
+        # Run in background thread to not block UI
+        threading.Thread(target=run, daemon=True).start()
+    
     def run_annotation(self, _):
         """Manually trigger annotation."""
         logger.info("Manual annotation triggered...")
@@ -511,8 +538,8 @@ class ChronometryApp(rumps.App):
         """Setup global hotkey listener for Cmd+Shift+6."""
         def on_activate():
             """Callback when hotkey is pressed."""
-            logger.info("Hotkey Cmd+Shift+6 pressed - triggering capture")
-            self.capture_now()
+            logger.info("Hotkey Cmd+Shift+6 pressed - triggering region capture")
+            self.capture_region_now()
         
         # Define the hotkey combination: Cmd+Shift+6
         hotkey = keyboard.HotKey(
@@ -532,7 +559,7 @@ class ChronometryApp(rumps.App):
         
         # Start listener in daemon thread
         keyboard_listener.start()
-        logger.info("Global hotkey registered: Cmd+Shift+6 for Capture Now")
+        logger.info("Global hotkey registered: Cmd+Shift+6 for Region Capture")
     
     def quit_app(self, _):
         """Quit the application - stop the service."""
