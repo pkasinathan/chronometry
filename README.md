@@ -47,7 +47,7 @@ A privacy-first, AI-powered work activity analyzer that automatically captures, 
 - **📹 Camera Privacy Protection** - Auto-pauses during video calls (NEW!)
 - **🎯 Synthetic Annotations** - Tracks meeting time without screenshots
 - **⏸️ Easy Pause/Resume** - One-click pause for sensitive work
-- **🗑️ Auto-Cleanup** - Configurable data retention (default: 3 days)
+- **🗑️ Auto-Cleanup** - Configurable data retention (default: 3 years)
 
 ### User Interfaces
 
@@ -140,7 +140,7 @@ Edit `config/config.yaml`:
 capture:
   fps: 0.00333333              # 1 frame / 300 sec = every 5 min
   monitor_index: 1             # Which monitor to capture
-  retention_days: 3            # Auto-delete after 3 days
+  retention_days: 1095         # Auto-delete after 3 years
 
 # AI annotation settings
 annotation:

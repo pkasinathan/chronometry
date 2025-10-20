@@ -407,12 +407,12 @@ digest:
 
 ```yaml
 capture:
-  retention_days: 3  # Keep data for 3 days
+  retention_days: 1095  # Keep data for 3 years
   
 # Options:
-# retention_days: 1   # Keep 1 day
-# retention_days: 7   # Keep 1 week
-# retention_days: 30  # Keep 1 month
+# retention_days: 7    # Keep 1 week
+# retention_days: 30   # Keep 1 month
+# retention_days: 365  # Keep 1 year
 ```
 
 ---

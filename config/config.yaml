@@ -20,7 +20,7 @@ capture:
   
   # Days to keep screenshots before auto-deletion
   # cleanup_old_data() runs hourly and deletes folders older than this
-  retention_days: 3
+  retention_days: 1095
 
 # Annotation settings - used by annotate.py
 annotation:
