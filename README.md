@@ -199,7 +199,7 @@ digest:
 - `bin/start_chronometry_menubar.sh` / `bin/stop_chronometry_menubar.sh`
 - `bin/start_chronometry_webserver.sh` / `bin/stop_chronometry_webserver.sh`
 
-**See [SCRIPTS.md](SCRIPTS.md) for complete reference**
+**See [bin/README.md](bin/README.md) for complete script reference**
 
 ---
 
@@ -472,8 +472,8 @@ GET  /api/export/json?date=<date>  # Export as JSON
 ## 📚 Documentation
 
 - **[README.md](README.md)** - This file - project overview and quick start
-- **[SETUP.md](SETUP.md)** - Complete setup guide with hotkey configuration
-- **[SCRIPTS.md](SCRIPTS.md)** - Shell script reference (all 6 scripts)
+- **[bin/README.md](bin/README.md)** - Complete shell script reference (all 7 scripts)
+- **[config/README.md](config/README.md)** - Configuration guide
 - **Script Headers** - Each .sh file has 50+ line documentation header
 - **Code Comments** - Inline documentation in all Python modules
 
@@ -735,7 +735,7 @@ For internal Netflix use. Ensure compliance with Netflix tool policies.
 
 ## 🚀 Getting Help
 
-- **Script Reference**: See [SCRIPTS.md](SCRIPTS.md) - Complete guide to all 6 scripts
+- **Script Reference**: See [bin/README.md](bin/README.md) - Complete guide to all 7 scripts
 - **Web Dashboard**: Visit http://localhost:8051 and explore the 5 tabs
 - **Configuration**: Edit `config/config.yaml` or use Settings tab in web UI
 - **Script Headers**: Each .sh file has detailed usage documentation
