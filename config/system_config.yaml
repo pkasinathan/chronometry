@@ -1,0 +1,116 @@
+# Chronometry System Configuration
+# ==================================
+# Advanced settings for system-level configuration
+# Only edit these if you know what you're doing!
+# These settings are NOT exposed in the UI
+
+server:
+  # Web server host (0.0.0.0 = all interfaces, 127.0.0.1 = localhost only)
+  host: "0.0.0.0"
+  
+  # Web server port
+  port: 8051
+  
+  # Debug mode (true = development, false = production)
+  debug: true
+  
+  # Flask secret key for sessions
+  secret_key: "chronometry-secret-key-2025"
+
+paths:
+  # Base directory where all data is stored
+  root_dir: "./data"
+  
+  # Directory where timeline HTML files are saved
+  output_dir: "./output"
+  
+  # Directory for log files
+  logs_dir: "./logs"
+
+annotation:
+  # Metatron API endpoint for image summarization
+  api_url: "https://aiopsproxy.cluster.us-east-1.prod.cloud.netflix.net:7004/images/summarize"
+  
+  # Metatron command and app name
+  metatron_command: "metatron"
+  metatron_app: "aiopsproxy"
+  
+  # API timeout in seconds
+  timeout_sec: 30
+  
+  # File extension for annotation files
+  json_suffix: ".json"
+
+digest:
+  # Enable/disable digest generation (system-level control)
+  enabled: true
+  
+  # Copilot API base URL for digest generation
+  api_url: "https://copilotdpjava.vip.us-east-1.prod.cloud.netflix.net:8443"
+  
+  # Metatron app name for digest
+  metatron_app: "copilotdpjava"
+  
+  # AI model configuration
+  model: "gpt-4o"
+  temperature: 0.7
+  max_tokens_default: 500
+  max_tokens_category: 200
+  max_tokens_overall: 300
+  
+  # System prompt for AI
+  system_prompt: "You are an AI assistant that creates concise, professional summaries of work activities. Generate clear, well-structured summaries that highlight key accomplishments and patterns."
+
+capture:
+  # Custom capture region [x, y, width, height] or null for full screen
+  # Advanced feature - use null for full screen
+  region: null
+  
+  # Startup delay before first capture (seconds)
+  startup_delay_seconds: 5
+  
+  # Timeout for screen lock detection (seconds)
+  screen_check_timeout: 2
+
+menubar:
+  # How often menubar app checks for work (seconds)
+  check_interval_seconds: 10
+
+timeline:
+  # How often to regenerate timeline (seconds)
+  generation_interval_seconds: 300
+  
+  # Activity gap tolerance (minutes) - activities within this gap are merged
+  gap_minutes: 5
+  
+  # Timeline HTML title
+  title: "Chronometry Timeline"
+  
+  # Include keywords filter (empty = include all)
+  # Not currently implemented in code
+  include_keywords: []
+
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log format string
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+categories:
+  # Categories considered as "focused work"
+  focus:
+    - Code
+    - Documentation
+    - Work
+    - Learning
+    - Design
+    - Email
+    - Meeting
+  
+  # Categories considered as "distractions"
+  distraction:
+    - Video
+    - Social
+    - Browsing
+

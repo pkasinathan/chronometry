@@ -207,18 +207,28 @@ class ChronometryApp(rumps.App):
         from PIL import Image
         from common import get_frame_path, ensure_dir, cleanup_old_data, get_monitor_config
         
-        # Wait 5 seconds after notification
-        time.sleep(5)
+        # Check if notifications are enabled
+        notifications_enabled = self.config.get('notifications', {}).get('enabled', True)
+        
+        # Wait 5 seconds after notification (startup delay from system config)
+        # Note: In system_config.yaml this is under capture.startup_delay_seconds
+        # But it might also be in the top-level system config
+        startup_delay = 5  # Default
+        if 'capture' in self.config and 'startup_delay_seconds' in self.config['capture']:
+            startup_delay = self.config['capture']['startup_delay_seconds']
+        
+        time.sleep(startup_delay)
         
         capture_config = self.config['capture']
         root_dir = self.config['root_dir']
         
-        fps = capture_config['fps']
+        capture_interval_seconds = capture_config.get('capture_interval_seconds', 900)
         monitor_index = capture_config['monitor_index']
-        region = capture_config['region']
-        retention_days = capture_config.get('retention_days', 3)
+        # Get region from system config if exists
+        region = self.config.get('capture', {}).get('region')
+        retention_days = capture_config.get('retention_days', 1095)
         
-        sleep_interval = 1.0 / fps if fps > 0 else 30.0
+        sleep_interval = capture_interval_seconds
         
         last_cleanup = 0
         
@@ -250,7 +260,8 @@ class ChronometryApp(rumps.App):
                     # Check if screen is locked
                     if is_screen_locked():
                         logger.info("🔒 Screen is locked - skipping capture")
-                        show_notification("Chronometry", "🔒 Screen locked - capture skipped")
+                        if notifications_enabled:
+                            show_notification("Chronometry", "🔒 Screen locked - capture skipped")
                         self.skipped_locked += 1
                         time.sleep(sleep_interval)
                         continue
@@ -258,7 +269,8 @@ class ChronometryApp(rumps.App):
                     # Check if camera is in use (video calls, etc.)
                     if is_camera_in_use():
                         logger.info("📹 Camera is in use - skipping capture for privacy")
-                        show_notification("Chronometry", "📹 Camera active - capture skipped")
+                        if notifications_enabled:
+                            show_notification("Chronometry", "📹 Camera active - capture skipped")
                         
                         # Create synthetic annotation to track the meeting time
                         timestamp = datetime.now()
@@ -273,8 +285,10 @@ class ChronometryApp(rumps.App):
                         time.sleep(sleep_interval)
                         continue
                     
-                    # Show notification before capture
-                    show_notification("Chronometry", "📸 Capturing screenshot now...")
+                    # Show notification before capture (if enabled and configured)
+                    notify_before_capture = self.config.get('notifications', {}).get('notify_before_capture', True)
+                    if notifications_enabled and notify_before_capture:
+                        show_notification("Chronometry", "📸 Capturing screenshot now...")
                     
                     # Capture screenshot
                     timestamp = datetime.now()
@@ -297,16 +311,16 @@ class ChronometryApp(rumps.App):
     def _annotation_loop(self):
         """Periodic annotation, timeline generation, and digest creation."""
         # Calculate annotation interval based on capture rate and batch size
-        # If batch_size=3 and capture every 5min, wait 15min for 3 frames
-        capture_fps = self.config['capture'].get('fps', 0.00333333)
-        capture_interval = 1.0 / capture_fps if capture_fps > 0 else 300
+        # If batch_size=3 and capture every 15min, wait 45min for 3 frames
+        capture_interval = self.config['capture'].get('capture_interval_seconds', 900)
         batch_size = self.config['annotation'].get('batch_size', 1)
         
         # Annotation should run after batch_size * capture_interval
         # Add small buffer to ensure frames are ready
         annotation_interval = (batch_size * capture_interval) + 30  
         
-        timeline_interval = 300  # 5 minutes
+        # Get timeline generation interval from config
+        timeline_interval = self.config.get('timeline', {}).get('generation_interval_seconds', 300)
         
         # Get digest interval from config
         digest_config = self.config.get('digest', {})
@@ -370,7 +384,8 @@ class ChronometryApp(rumps.App):
         
         def run():
             try:
-                success = capture_single_frame(self.config, show_notifications=True)
+                notifications_enabled = self.config.get('notifications', {}).get('enabled', True)
+                success = capture_single_frame(self.config, show_notifications=notifications_enabled)
                 if success:
                     self.manual_captures += 1
                     logger.info(f"Manual capture successful (total: {self.manual_captures})")
@@ -378,10 +393,9 @@ class ChronometryApp(rumps.App):
                     logger.warning("Manual capture was skipped (screen locked or camera active)")
             except Exception as e:
                 logger.error(f"Manual capture failed: {e}")
-                rumps.notification(
+                show_notification(
                     "Chronometry",
-                    "Capture Failed",
-                    f"Error: {str(e)}"
+                    f"Capture Failed: {str(e)}"
                 )
         
         # Run in background thread to not block UI
@@ -397,7 +411,8 @@ class ChronometryApp(rumps.App):
         
         def run():
             try:
-                success = capture_region_interactive(self.config, show_notifications=True)
+                notifications_enabled = self.config.get('notifications', {}).get('enabled', True)
+                success = capture_region_interactive(self.config, show_notifications=notifications_enabled)
                 if success:
                     self.manual_captures += 1
                     logger.info(f"Region capture successful (total: {self.manual_captures})")
@@ -405,10 +420,9 @@ class ChronometryApp(rumps.App):
                     logger.info("Region capture was cancelled or skipped")
             except Exception as e:
                 logger.error(f"Region capture failed: {e}")
-                rumps.notification(
+                show_notification(
                     "Chronometry",
-                    "Region Capture Failed",
-                    f"Error: {str(e)}"
+                    f"Region Capture Failed: {str(e)}"
                 )
         
         # Run in background thread to not block UI

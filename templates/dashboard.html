@@ -1267,11 +1267,12 @@
                             </div>
                             <div class="settings-container-body">
                                 <div class="settings-field">
-                                    <label class="settings-label">Capture FPS</label>
-                                    <input type="number" v-model.number="settings.capture.fps" step="0.001" 
+                                    <label class="settings-label">Capture Interval (seconds)</label>
+                                    <input type="number" v-model.number="settings.capture.capture_interval_seconds" 
                                            class="settings-input">
                                     <div class="settings-hint">
-                                        Current: 1 frame every [[ Math.round(1 / settings.capture.fps) ]] seconds
+                                        Current: 1 capture every [[ settings.capture.capture_interval_seconds ]] seconds ([[ Math.round(settings.capture.capture_interval_seconds / 60) ]] minutes)
+                                        <br>Examples: 900 = 15 min, 600 = 10 min, 1800 = 30 min
                                     </div>
                                 </div>
                                 
@@ -1307,7 +1308,19 @@
                                     <input type="number" v-model.number="settings.annotation.batch_size" 
                                            class="settings-input">
                                     <div class="settings-hint">
-                                        Number of images to process per Metatron API request
+                                        Number of images to batch together for AI analysis<br>
+                                        Higher = more context but slower processing
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-label">AI Prompt</label>
+                                    <textarea v-model="settings.annotation.prompt" 
+                                              class="settings-input" 
+                                              rows="4"
+                                              style="resize: vertical; font-family: inherit;"></textarea>
+                                    <div class="settings-hint">
+                                        Customize how AI analyzes your screenshots
                                     </div>
                                 </div>
                             </div>
@@ -1325,7 +1338,48 @@
                                     <input type="number" v-model.number="settings.timeline.bucket_minutes" 
                                            class="settings-input">
                                     <div class="settings-hint">
-                                        Time window for grouping similar activities together
+                                        Time window (in minutes) for grouping similar activities together
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-label">Exclude Keywords</label>
+                                    <textarea v-model="settings.timeline.exclude_keywords_text" 
+                                              class="settings-input" 
+                                              rows="2"
+                                              placeholder="youtube, reddit, twitter"
+                                              style="resize: vertical; font-family: inherit;"></textarea>
+                                    <div class="settings-hint">
+                                        Comma-separated keywords to hide from timeline (case-insensitive)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Notifications Settings Container -->
+                        <div class="settings-container">
+                            <div class="settings-container-header">
+                                <span class="settings-container-icon">🔔</span>
+                                <h3 class="settings-container-title">Notification Settings</h3>
+                            </div>
+                            <div class="settings-container-body">
+                                <div class="settings-field">
+                                    <label class="settings-checkbox-label">
+                                        <input type="checkbox" v-model="settings.notifications.enabled" class="settings-checkbox">
+                                        <span>Enable Desktop Notifications</span>
+                                    </label>
+                                    <div class="settings-hint">
+                                        Show system notifications for captures and events
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-checkbox-label">
+                                        <input type="checkbox" v-model="settings.notifications.notify_before_capture" class="settings-checkbox">
+                                        <span>Notify Before Each Capture</span>
+                                    </label>
+                                    <div class="settings-hint">
+                                        Show a notification before taking each screenshot
                                     </div>
                                 </div>
                             </div>
@@ -1339,21 +1393,12 @@
                             </div>
                             <div class="settings-container-body">
                                 <div class="settings-field">
-                                    <label class="settings-checkbox-label">
-                                        <input type="checkbox" v-model="settings.digest.enabled" class="settings-checkbox">
-                                        <span>Enable Automatic Digest Generation</span>
-                                    </label>
-                                    <div class="settings-hint">
-                                        When enabled, digest_scheduler.py automatically generates daily summaries
-                                    </div>
-                                </div>
-                                
-                                <div class="settings-field">
                                     <label class="settings-label">Generation Interval (seconds)</label>
                                     <input type="number" v-model.number="settings.digest.interval_seconds" 
                                            class="settings-input">
                                     <div class="settings-hint">
-                                        Current: Generate every [[ Math.round(settings.digest.interval_seconds / 60) ]] minutes
+                                        Current: Generate every [[ Math.round(settings.digest.interval_seconds / 60) ]] minutes<br>
+                                        Examples: 3600 = 1 hour, 7200 = 2 hours, 1800 = 30 minutes
                                     </div>
                                 </div>
                                 
@@ -1363,16 +1408,6 @@
                                            class="settings-input">
                                     <div class="settings-hint">
                                         Netflix Copilot Project ID used for digest generation API calls
-                                    </div>
-                                </div>
-                                
-                                <div class="settings-field">
-                                    <label class="settings-checkbox-label">
-                                        <input type="checkbox" v-model="settings.digest.auto_regenerate" class="settings-checkbox">
-                                        <span>Auto-regenerate on New Activity</span>
-                                    </label>
-                                    <div class="settings-hint">
-                                        Automatically regenerate digest when new frames are detected
                                     </div>
                                 </div>
                             </div>
@@ -1446,22 +1481,25 @@
                     searchResults: [],
                     settings: {
                         capture: {
-                            fps: 0.00333333,
+                            capture_interval_seconds: 900,
                             monitor_index: 1,
                             retention_days: 1095
                         },
                         annotation: {
-                            batch_size: 1
+                            batch_size: 4,
+                            prompt: 'Summarize the type of task or activity shown in these images using clear, work-related terms.'
                         },
                         timeline: {
-                            bucket_minutes: 30
+                            bucket_minutes: 30,
+                            exclude_keywords_text: ''  // Comma-separated text, converted to/from array
                         },
                         digest: {
-                            enabled: true,
                             interval_seconds: 3600,
-                            active_hours: null,
-                            auto_regenerate: true,
-                            ncp_project_id: 'prabhuai'
+                            ncp_project_id: 'pkasichronometry'
+                        },
+                        notifications: {
+                            enabled: true,
+                            notify_before_capture: true
                         }
                     },
                     availableDates: [],
@@ -1822,27 +1860,85 @@
                         const response = await fetch('/api/config');
                         const data = await response.json();
                         this.settings = data;
+                        
+                        // Convert exclude_keywords array to comma-separated text
+                        if (this.settings.timeline && this.settings.timeline.exclude_keywords) {
+                            this.settings.timeline.exclude_keywords_text = this.settings.timeline.exclude_keywords.join(', ');
+                        }
                     } catch (error) {
                         console.error('Error loading settings:', error);
                     }
                 },
                 
                 async saveSettings() {
+                    // Validation
+                    const errors = [];
+                    
+                    // Validate capture settings
+                    if (!this.settings.capture.capture_interval_seconds || this.settings.capture.capture_interval_seconds <= 0) {
+                        errors.push('Capture Interval must be a positive number in seconds (e.g., 900 for 15 minutes)');
+                    }
+                    if (this.settings.capture.monitor_index === null || this.settings.capture.monitor_index === undefined || this.settings.capture.monitor_index < 0) {
+                        errors.push('Monitor Index must be a non-negative number (0 or higher)');
+                    }
+                    if (!this.settings.capture.retention_days || this.settings.capture.retention_days <= 0) {
+                        errors.push('Retention Days must be a positive number');
+                    }
+                    
+                    // Validate annotation settings
+                    if (!this.settings.annotation.batch_size || this.settings.annotation.batch_size <= 0) {
+                        errors.push('Annotation Batch Size must be a positive number');
+                    }
+                    if (!this.settings.annotation.prompt || this.settings.annotation.prompt.trim() === '') {
+                        errors.push('AI Prompt cannot be empty');
+                    }
+                    
+                    // Validate timeline settings
+                    if (!this.settings.timeline.bucket_minutes || this.settings.timeline.bucket_minutes <= 0) {
+                        errors.push('Timeline Bucket Minutes must be a positive number');
+                    }
+                    
+                    // Validate digest settings
+                    if (!this.settings.digest.interval_seconds || this.settings.digest.interval_seconds <= 0) {
+                        errors.push('Digest Interval must be a positive number (in seconds)');
+                    }
+                    if (!this.settings.digest.ncp_project_id || this.settings.digest.ncp_project_id.trim() === '') {
+                        errors.push('NCP Project Name cannot be empty');
+                    }
+                    
+                    // Show validation errors
+                    if (errors.length > 0) {
+                        alert('Validation Errors:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+                        return;
+                    }
+                    
+                    // Prepare settings for save
+                    const settingsToSave = JSON.parse(JSON.stringify(this.settings));
+                    
+                    // Convert exclude_keywords_text to array
+                    if (settingsToSave.timeline.exclude_keywords_text !== undefined) {
+                        const text = settingsToSave.timeline.exclude_keywords_text.trim();
+                        settingsToSave.timeline.exclude_keywords = text ? text.split(',').map(k => k.trim()).filter(k => k) : [];
+                        delete settingsToSave.timeline.exclude_keywords_text;
+                    }
+                    
+                    // Save if validation passes
                     try {
                         const response = await fetch('/api/config', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.settings)
+                            body: JSON.stringify(settingsToSave)
                         });
                         
                         if (response.ok) {
-                            alert('Settings saved successfully!');
+                            alert('✅ Settings saved successfully!\n\nNote: Restart services for changes to take effect.');
                         } else {
-                            alert('Failed to save settings');
+                            const errorData = await response.json();
+                            alert('❌ Failed to save settings: ' + (errorData.message || 'Unknown error'));
                         }
                     } catch (error) {
                         console.error('Error saving settings:', error);
-                        alert('Error saving settings');
+                        alert('❌ Error saving settings: ' + error.message);
                     }
                 },
                 

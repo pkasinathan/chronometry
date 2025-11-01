@@ -20,12 +20,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def call_copilot_api(prompt: str, config: dict, max_tokens: int = 500, context: str = None) -> str:
+def call_copilot_api(prompt: str, config: dict, max_tokens: int = None, context: str = None) -> str:
     """Call the Copilot API for text generation."""
     try:
+        # Get digest config
+        digest_config = config.get('digest', {})
+        model = digest_config.get('model', 'gpt-4o')
+        temperature = digest_config.get('temperature', 0.7)
+        if max_tokens is None:
+            max_tokens = digest_config.get('max_tokens_default', 500)
+        
         json_payload = {
-            "model": "gpt-4o",
-            "temperature": 0.7,
+            "model": model,
+            "temperature": temperature,
             "max_tokens": max_tokens,
             "messages": [
                 {
@@ -39,14 +46,18 @@ def call_copilot_api(prompt: str, config: dict, max_tokens: int = 500, context: 
             ]
         }
         
-        # Get NCP project ID from config or use default
-        ncp_project_id = config.get('digest', {}).get('ncp_project_id', 'prabhuai')
+        # Get API URL from digest config
+        ncp_project_id = digest_config.get('ncp_project_id', 'prabhuai')
+        api_base_url = digest_config.get('api_url', 'https://copilotdpjava.vip.us-east-1.prod.cloud.netflix.net:8443')
+        
+        # Construct the full API URL
+        api_url = f"{api_base_url}/{ncp_project_id}/v1/chat/completions"
         
         # Create the curl command
         cmd = [
             "metatron", "curl", "-a", "copilotdpjava",
             "-X", "POST",
-            f"https://copilotdpjava.vip.us-east-1.prod.cloud.netflix.net:8443/{ncp_project_id}/v1/chat/completions",
+            api_url,
             "-d", json.dumps(json_payload),
             "-H", "Content-Type: application/json"
         ]
@@ -159,7 +170,9 @@ def generate_category_summaries(activities: List[Dict], config: dict) -> Tuple[D
 
 Provide a concise, professional summary."""
         
-        result = call_copilot_api(prompt, config, max_tokens=200, context=f"Category: {category}")
+        # Get max tokens from config
+        max_tokens_category = config.get('digest', {}).get('max_tokens_category', 200)
+        result = call_copilot_api(prompt, config, max_tokens=max_tokens_category, context=f"Category: {category}")
         total_tokens += result['tokens']
         
         category_summaries[category] = {
@@ -205,7 +218,9 @@ def generate_overall_summary(activities: List[Dict], stats: Dict, config: dict) 
 
 Create an engaging summary that highlights productivity and key focus areas."""
     
-    result = call_copilot_api(prompt, config, max_tokens=300, context="Overall summary")
+    # Get max tokens from config
+    max_tokens_overall = config.get('digest', {}).get('max_tokens_overall', 300)
+    result = call_copilot_api(prompt, config, max_tokens=max_tokens_overall, context="Overall summary")
     return result['content'], result['tokens']
 
 
@@ -239,8 +254,8 @@ def generate_daily_digest(date: datetime, config: dict) -> Dict:
     
     logger.info(f"Found {len(annotations)} annotations")
     
-    # Group into activities
-    activities = group_activities(annotations, gap_minutes=5)
+    # Group into activities using config
+    activities = group_activities(annotations, config=config)
     stats = calculate_stats(activities)
     
     logger.info(f"Generating digest for {len(activities)} activities...")

@@ -122,8 +122,8 @@ Your NGP will be private to you and used exclusively by this tool.
 3. View real-time digest and analytics
 
 **Automatic Processing** (defaults - all configurable):
-- 📸 Capture: Every 15 minutes (configurable via `capture.fps`)
-- 🤖 Annotation: Every 2 minutes (processes in batches of 4 frames)
+- 📸 Capture: Every 15 minutes (configurable via `capture.capture_interval_seconds`)
+- 🤖 Annotation: Automatic batching (processes in batches of 4 frames)
 - 📊 Timeline: Every 5 minutes
 - 📋 **Digest: Every 60 minutes** (configurable via `digest.interval_seconds`)
 
@@ -131,42 +131,51 @@ Your NGP will be private to you and used exclusively by this tool.
 
 ## ⚙️ Configuration
 
-**Default Settings** (edit `config/config.yaml` or use Web UI):
+Chronometry uses a **split configuration system**:
+
+- **`config/user_config.yaml`** - User-customizable settings (exposed in UI)
+- **`config/system_config.yaml`** - System-level settings (advanced/internal)
+
+**User Settings** (edit via Web UI at http://localhost:8051/ Settings tab):
 
 ```yaml
 # Screen capture settings
 capture:
-  fps: 0.00111111              # 1 frame / 900 sec = every 15 min (default)
-  monitor_index: 1             # Which monitor to capture (0 = all monitors)
-  retention_days: 1095         # Auto-delete after 3 years from your local MAC path
-  region: null                 # Capture region [x, y, w, h] or null for full screen
+  capture_interval_seconds: 900  # Capture every 15 minutes
+  monitor_index: 1               # Which monitor (0=all, 1=primary, 2=secondary)
+  retention_days: 1095           # Keep for 3 years
 
 # AI annotation settings
 annotation:
-  batch_size: 4                # Frames per API call (default: 4 for better context)
-  timeout_sec: 30              # API timeout
-  api_url: "https://aiopsproxy..."  # Metatron API endpoint
-  prompt: "Summarize the type of task..."  # AI instruction
-
-# Timeline settings
-timeline:
-  bucket_minutes: 30           # Time grouping for continuous activities
-  min_tokens_per_bucket: 20    # Filter out minimal activity periods
-  output_dir: "./output"       # Where HTML timelines are saved
+  batch_size: 4                  # Images per AI analysis batch
+  prompt: "Summarize the..."     # Customize AI analysis prompt
 
 # Digest settings
 digest:
-  enabled: true                # Enable automatic digest generation
-  interval_seconds: 3600       # Generate every 60 minutes (default: 1 hour)
-  ncp_project_id: "prabhuai"   # Your Netflix Gateway Project ID
+  interval_seconds: 3600         # Generate digest every hour
+  ncp_project_id: "yourproject"  # Your Copilot project ID
+
+# Timeline settings
+timeline:
+  bucket_minutes: 30             # Activity grouping window
+  exclude_keywords: []           # Filter out distractions
+
+# Notifications
+notifications:
+  enabled: true                  # Desktop notifications
+  notify_before_capture: true    # Alert before captures
 ```
 
-**💡 Tip**: All settings are configurable! Edit the YAML file directly or use the **Settings tab** in the web UI at http://localhost:8051 for a user-friendly interface.
+**💡 Tip**: Use the **Settings tab** in the web UI (http://localhost:8051/) for a user-friendly interface with validation!
 
 **Common Adjustments**:
-- **More frequent captures**: Set `fps: 0.00333333` (every 5 min)
+- **More frequent captures**: Set `capture_interval_seconds: 600` (every 10 min)
+- **Less frequent**: Set `capture_interval_seconds: 1800` (every 30 min)
 - **Larger batches**: Set `batch_size: 6` (more context for AI)
 - **Shorter retention**: Set `retention_days: 30` (save disk space)
+- **Filter distractions**: Set `exclude_keywords: ["youtube", "reddit", "twitter"]`
+
+**Advanced**: System settings in `config/system_config.yaml` (API URLs, ports, internal timings). See `config/README.md` for details.
 
 ---
 

@@ -168,11 +168,64 @@ install_services() {
     # Load services
     echo ""
     print_info "Loading services..."
-    launchctl load "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" 2>/dev/null || print_warning "Web server already loaded or failed to load"
-    launchctl load "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" 2>/dev/null || print_warning "Menu bar already loaded or failed to load"
+    
+    # Load web server with error checking
+    if launchctl load "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" 2>&1 | tee /tmp/chronometry_load_error.txt | grep -q "already loaded"; then
+        print_warning "Web server already loaded"
+    elif grep -q "error" /tmp/chronometry_load_error.txt; then
+        print_error "Failed to load web server:"
+        cat /tmp/chronometry_load_error.txt | sed 's/^/  /'
+        echo ""
+        print_info "Check error log for details: $LOGS_DIR/webserver.error.log"
+    else
+        print_success "Web server loaded"
+    fi
+    rm -f /tmp/chronometry_load_error.txt
+    
+    # Load menu bar with error checking
+    if launchctl load "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" 2>&1 | tee /tmp/chronometry_load_error.txt | grep -q "already loaded"; then
+        print_warning "Menu bar already loaded"
+    elif grep -q "error" /tmp/chronometry_load_error.txt; then
+        print_error "Failed to load menu bar:"
+        cat /tmp/chronometry_load_error.txt | sed 's/^/  /'
+        echo ""
+        print_info "Check error log for details: $LOGS_DIR/menubar.error.log"
+    else
+        print_success "Menu bar loaded"
+    fi
+    rm -f /tmp/chronometry_load_error.txt
+    
+    # Wait a moment for services to start
+    sleep 2
+    
+    # Verify services started successfully
+    echo ""
+    print_info "Verifying services..."
+    
+    # Check web server
+    if is_service_loaded "user.chronometry.webserver"; then
+        print_success "Web server is running"
+    else
+        print_error "Web server failed to start!"
+        if [ -f "$LOGS_DIR/webserver.error.log" ]; then
+            print_info "Recent errors from webserver.error.log:"
+            tail -10 "$LOGS_DIR/webserver.error.log" | sed 's/^/  /'
+        fi
+    fi
+    
+    # Check menu bar
+    if is_service_loaded "user.chronometry.menubar"; then
+        print_success "Menu bar app is running"
+    else
+        print_error "Menu bar app failed to start!"
+        if [ -f "$LOGS_DIR/menubar.error.log" ]; then
+            print_info "Recent errors from menubar.error.log:"
+            tail -10 "$LOGS_DIR/menubar.error.log" | sed 's/^/  /'
+        fi
+    fi
     
     echo ""
-    print_success "Services installed and started!"
+    print_success "Services installed!"
     print_info "Services will start automatically on boot"
     print_info "Logs location: $LOGS_DIR"
     print_info "Dashboard: http://localhost:8051"
@@ -199,8 +252,27 @@ start_services() {
         if is_service_loaded "user.chronometry.webserver"; then
             print_warning "Web server already running"
         else
-            launchctl load "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST"
-            print_success "Started web server"
+            if launchctl load "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" 2>&1 | tee /tmp/chronometry_start_error.txt | grep -qi "error"; then
+                print_error "Failed to start web server:"
+                cat /tmp/chronometry_start_error.txt | sed 's/^/  /'
+                echo ""
+                if [ -f "$LOGS_DIR/webserver.error.log" ]; then
+                    print_info "Recent errors from webserver.error.log:"
+                    tail -10 "$LOGS_DIR/webserver.error.log" | sed 's/^/  /'
+                fi
+            else
+                sleep 1
+                if is_service_loaded "user.chronometry.webserver"; then
+                    print_success "Started web server"
+                else
+                    print_error "Web server failed to start (check logs)"
+                    if [ -f "$LOGS_DIR/webserver.error.log" ]; then
+                        print_info "Recent errors:"
+                        tail -5 "$LOGS_DIR/webserver.error.log" | sed 's/^/  /'
+                    fi
+                fi
+            fi
+            rm -f /tmp/chronometry_start_error.txt
         fi
     else
         print_warning "Web server service not installed"
@@ -210,8 +282,27 @@ start_services() {
         if is_service_loaded "user.chronometry.menubar"; then
             print_warning "Menu bar app already running"
         else
-            launchctl load "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST"
-            print_success "Started menu bar app"
+            if launchctl load "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" 2>&1 | tee /tmp/chronometry_start_error.txt | grep -qi "error"; then
+                print_error "Failed to start menu bar app:"
+                cat /tmp/chronometry_start_error.txt | sed 's/^/  /'
+                echo ""
+                if [ -f "$LOGS_DIR/menubar.error.log" ]; then
+                    print_info "Recent errors from menubar.error.log:"
+                    tail -10 "$LOGS_DIR/menubar.error.log" | sed 's/^/  /'
+                fi
+            else
+                sleep 1
+                if is_service_loaded "user.chronometry.menubar"; then
+                    print_success "Started menu bar app"
+                else
+                    print_error "Menu bar app failed to start (check logs)"
+                    if [ -f "$LOGS_DIR/menubar.error.log" ]; then
+                        print_info "Recent errors:"
+                        tail -5 "$LOGS_DIR/menubar.error.log" | sed 's/^/  /'
+                    fi
+                fi
+            fi
+            rm -f /tmp/chronometry_start_error.txt
         fi
     else
         print_warning "Menu bar service not installed"
@@ -219,6 +310,7 @@ start_services() {
     
     echo ""
     print_info "Dashboard: http://localhost:8051"
+    print_info "Run './bin/manage_services.sh logs' to monitor services"
     echo ""
 }
 
@@ -280,7 +372,24 @@ check_status() {
     # Check web server
     if is_service_loaded "user.chronometry.webserver"; then
         print_success "Web Server: Running"
-        launchctl list user.chronometry.webserver | grep -E "PID|LastExitStatus" || true
+        
+        # Get detailed status
+        SERVICE_INFO=$(launchctl list user.chronometry.webserver)
+        PID=$(echo "$SERVICE_INFO" | grep "PID" | awk '{print $3}')
+        EXIT_STATUS=$(echo "$SERVICE_INFO" | grep "LastExitStatus" | awk '{print $3}')
+        
+        if [ -n "$PID" ] && [ "$PID" != "0" ]; then
+            print_info "Process ID: $PID"
+        fi
+        
+        if [ -n "$EXIT_STATUS" ] && [ "$EXIT_STATUS" != "0" ]; then
+            print_warning "Last exit status: $EXIT_STATUS (service may have crashed and restarted)"
+            if [ -f "$LOGS_DIR/webserver.error.log" ]; then
+                print_info "Recent errors:"
+                tail -5 "$LOGS_DIR/webserver.error.log" | sed 's/^/  /'
+            fi
+        fi
+        
         echo ""
         
         # Check if port is listening
@@ -288,9 +397,17 @@ check_status() {
             print_success "Port 8051: Listening"
         else
             print_warning "Port 8051: Not listening (may still be starting...)"
+            if [ -f "$LOGS_DIR/webserver.error.log" ]; then
+                print_info "Check recent errors:"
+                tail -3 "$LOGS_DIR/webserver.error.log" | sed 's/^/  /'
+            fi
         fi
     else
         print_error "Web Server: Not running"
+        if [ -f "$LOGS_DIR/webserver.error.log" ]; then
+            print_info "Last error:"
+            tail -5 "$LOGS_DIR/webserver.error.log" | sed 's/^/  /'
+        fi
     fi
     
     echo ""
@@ -298,9 +415,29 @@ check_status() {
     # Check menu bar
     if is_service_loaded "user.chronometry.menubar"; then
         print_success "Menu Bar App: Running"
-        launchctl list user.chronometry.menubar | grep -E "PID|LastExitStatus" || true
+        
+        # Get detailed status
+        SERVICE_INFO=$(launchctl list user.chronometry.menubar)
+        PID=$(echo "$SERVICE_INFO" | grep "PID" | awk '{print $3}')
+        EXIT_STATUS=$(echo "$SERVICE_INFO" | grep "LastExitStatus" | awk '{print $3}')
+        
+        if [ -n "$PID" ] && [ "$PID" != "0" ]; then
+            print_info "Process ID: $PID"
+        fi
+        
+        if [ -n "$EXIT_STATUS" ] && [ "$EXIT_STATUS" != "0" ]; then
+            print_warning "Last exit status: $EXIT_STATUS (service may have crashed and restarted)"
+            if [ -f "$LOGS_DIR/menubar.error.log" ]; then
+                print_info "Recent errors:"
+                tail -5 "$LOGS_DIR/menubar.error.log" | sed 's/^/  /'
+            fi
+        fi
     else
         print_error "Menu Bar App: Not running"
+        if [ -f "$LOGS_DIR/menubar.error.log" ]; then
+            print_info "Last error:"
+            tail -5 "$LOGS_DIR/menubar.error.log" | sed 's/^/  /'
+        fi
     fi
     
     echo ""

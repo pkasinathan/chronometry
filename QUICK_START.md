@@ -31,12 +31,16 @@ metatron smoketest
 
 You need an NGP (Netflix Gateway Project) for AI digest generation.
 
-**Create one here**: http://go/modelgateway
+**Create one here**: https://genai.netflix.net/projects/edit
 
 - ✅ Create a **new private project** (takes 30 seconds)
-- ✅ Name it something like `chronometry-<your-username>`
-- ✅ It's private to you and used only by this tool
-- ✅ Copy your project ID (e.g., `prabhuai`)
+- ✅ Name it something like `<yourinitials>chronometry`. 
+  - Example: 
+    - GenAI Project ID: `pkasichronometry`.
+    - GenAI Project Name: `pkasichronometry`
+    - Use Case Description(required): `AI project which is used on my Chronometry Application for digest generation.`
+    - You can disable Braintrust logging and Notebooks access. Do not grant access to anyone else.
+- ✅ It's private to you and used only by your tool
 
 ---
 
@@ -72,14 +76,19 @@ Before first use, set your Netflix Gateway Project ID:
 
 ### Option 2: Edit Config File
 ```bash
-nano config/config.yaml
+nano config/user_config.yaml
 ```
 
 Find and update:
 ```yaml
 digest:
-  ncp_project_id: "your-project-id-here"  # Replace with your NGP project ID
+  ncp_project_id: "your-project-id-here"  # Replace with your project ID
 ```
+
+**Note**: Chronometry now uses split configs:
+- `user_config.yaml` - Your customizable settings (edit this!)
+- `system_config.yaml` - System settings (advanced only)
+- `config.yaml` - Legacy (still supported for backward compatibility)
 
 ---
 

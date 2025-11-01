@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 import os
 template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
 app = Flask(__name__, template_folder=template_dir)
-app.config['SECRET_KEY'] = 'chronometry-secret-key-2025'
+# SECRET_KEY will be set after config is loaded
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -51,6 +51,10 @@ def init_config():
         if 'root_dir' in config and not Path(config['root_dir']).is_absolute():
             project_root = Path(__file__).parent.parent
             config['root_dir'] = str(project_root / config['root_dir'])
+        
+        # Set Flask secret key from config
+        server_config = config.get('server', {})
+        app.config['SECRET_KEY'] = server_config.get('secret_key', 'chronometry-secret-key-2025')
         
         logger.info(f"Configuration loaded successfully. Root dir: {config.get('root_dir')}")
     except Exception as e:
@@ -76,37 +80,55 @@ def health_check():
 
 @app.route('/api/config')
 def get_config():
-    """Get current configuration."""
+    """Get current user-level configuration (exposed in UI)."""
     return jsonify({
         'capture': {
-            'fps': config['capture']['fps'],
+            'capture_interval_seconds': config['capture'].get('capture_interval_seconds', 900),
             'monitor_index': config['capture']['monitor_index'],
             'retention_days': config['capture']['retention_days']
         },
         'annotation': {
-            'batch_size': config['annotation']['batch_size']
+            'batch_size': config['annotation']['batch_size'],
+            'prompt': config['annotation'].get('prompt', 'Summarize the type of task or activity shown in these images.')
         },
         'timeline': {
-            'bucket_minutes': config['timeline']['bucket_minutes']
+            'bucket_minutes': config['timeline']['bucket_minutes'],
+            'exclude_keywords': config['timeline'].get('exclude_keywords', [])
         },
         'digest': {
-            'enabled': config.get('digest', {}).get('enabled', True),
             'interval_seconds': config.get('digest', {}).get('interval_seconds', 3600),
-            'active_hours': config.get('digest', {}).get('active_hours', None),
-            'auto_regenerate': config.get('digest', {}).get('auto_regenerate', True),
-            'ncp_project_id': config.get('digest', {}).get('ncp_project_id', 'prabhuai')
+            'ncp_project_id': config.get('digest', {}).get('ncp_project_id', 'pkasichronometry')
+        },
+        'notifications': {
+            'enabled': config.get('notifications', {}).get('enabled', True),
+            'notify_before_capture': config.get('notifications', {}).get('notify_before_capture', True)
         }
     })
 
 
 @app.route('/api/config', methods=['PUT'])
 def update_config():
-    """Update configuration while preserving comments and formatting."""
+    """Update user configuration while preserving comments and formatting.
+    
+    Only updates user_config.yaml (user-editable settings).
+    System configs cannot be modified via API.
+    """
     try:
         updates = request.json
         
+        # Determine which config file to update
+        user_config_path = Path('config/user_config.yaml')
+        legacy_config_path = Path('config/config.yaml')
+        
+        # Use user_config.yaml if it exists, otherwise fall back to legacy
+        if user_config_path.exists():
+            config_path = str(user_config_path)
+            logger.info("Updating user_config.yaml")
+        else:
+            config_path = str(legacy_config_path)
+            logger.warning("Updating legacy config.yaml (consider migrating to split configs)")
+        
         # Read the original file to preserve comments
-        config_path = 'config/config.yaml'
         with open(config_path, 'r') as f:
             lines = f.readlines()
         
@@ -115,17 +137,27 @@ def update_config():
         with open(config_path, 'r') as f:
             current_config = yaml.safe_load(f)
         
-        # Apply updates
+        # Apply updates (only user-level settings)
         if 'capture' in updates:
+            if 'capture' not in current_config:
+                current_config['capture'] = {}
             current_config['capture'].update(updates['capture'])
         if 'annotation' in updates:
+            if 'annotation' not in current_config:
+                current_config['annotation'] = {}
             current_config['annotation'].update(updates['annotation'])
         if 'timeline' in updates:
+            if 'timeline' not in current_config:
+                current_config['timeline'] = {}
             current_config['timeline'].update(updates['timeline'])
         if 'digest' in updates:
             if 'digest' not in current_config:
                 current_config['digest'] = {}
             current_config['digest'].update(updates['digest'])
+        if 'notifications' in updates:
+            if 'notifications' not in current_config:
+                current_config['notifications'] = {}
+            current_config['notifications'].update(updates['notifications'])
         
         # Update only the values in the original file, preserving comments
         import re
@@ -135,8 +167,8 @@ def update_config():
             
             # Update capture settings
             if 'capture' in updates:
-                if re.match(r'^\s+fps:', line):
-                    updated_line = re.sub(r':\s*[\d.]+', f": {updates['capture'].get('fps', current_config['capture']['fps'])}", line)
+                if re.match(r'^\s+capture_interval_seconds:', line):
+                    updated_line = re.sub(r':\s*\d+', f": {updates['capture'].get('capture_interval_seconds', current_config['capture'].get('capture_interval_seconds', 900))}", line)
                 elif re.match(r'^\s+monitor_index:', line):
                     updated_line = re.sub(r':\s*\d+', f": {updates['capture'].get('monitor_index', current_config['capture']['monitor_index'])}", line)
                 elif re.match(r'^\s+retention_days:', line):
@@ -146,21 +178,38 @@ def update_config():
             if 'annotation' in updates:
                 if re.match(r'^\s+batch_size:', line):
                     updated_line = re.sub(r':\s*\d+', f": {updates['annotation'].get('batch_size', current_config['annotation']['batch_size'])}", line)
+                elif re.match(r'^\s+prompt:', line):
+                    value = updates['annotation'].get('prompt', current_config['annotation'].get('prompt', ''))
+                    # Escape quotes and handle multiline
+                    value_escaped = value.replace('"', '\\"')
+                    updated_line = f'  prompt: "{value_escaped}"\n'
             
             # Update timeline settings
             if 'timeline' in updates:
                 if re.match(r'^\s+bucket_minutes:', line):
                     updated_line = re.sub(r':\s*\d+', f": {updates['timeline'].get('bucket_minutes', current_config['timeline']['bucket_minutes'])}", line)
+                elif re.match(r'^\s+exclude_keywords:', line):
+                    keywords = updates['timeline'].get('exclude_keywords', current_config['timeline'].get('exclude_keywords', []))
+                    if keywords:
+                        keywords_str = ', '.join([f'"{k}"' for k in keywords])
+                        updated_line = f'  exclude_keywords: [{keywords_str}]\n'
+                    else:
+                        updated_line = '  exclude_keywords: []\n'
             
             # Update digest settings
             if 'digest' in updates:
-                if re.match(r'^\s+enabled:', line):
-                    updated_line = re.sub(r':\s*\w+', f": {str(updates['digest'].get('enabled', current_config['digest']['enabled'])).lower()}", line)
-                elif re.match(r'^\s+interval_seconds:', line):
+                if re.match(r'^\s+interval_seconds:', line):
                     updated_line = re.sub(r':\s*\d+', f": {updates['digest'].get('interval_seconds', current_config['digest']['interval_seconds'])}", line)
                 elif re.match(r'^\s+ncp_project_id:', line):
                     value = updates['digest'].get('ncp_project_id', current_config['digest']['ncp_project_id'])
                     updated_line = re.sub(r':\s*"?[\w-]+"?', f': "{value}"', line)
+            
+            # Update notification settings
+            if 'notifications' in updates:
+                if re.match(r'^\s+enabled:', line) and 'notifications:' in ''.join(lines[max(0, lines.index(line)-5):lines.index(line)]):
+                    updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('enabled', current_config.get('notifications', {}).get('enabled', True))).lower()}", line)
+                elif re.match(r'^\s+notify_before_capture:', line):
+                    updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('notify_before_capture', current_config.get('notifications', {}).get('notify_before_capture', True))).lower()}", line)
             
             updated_lines.append(updated_line)
         
@@ -209,7 +258,7 @@ def get_stats():
                 # Load annotations and calculate stats
                 annotations = load_annotations(date_dir)
                 if annotations:
-                    activities = group_activities(annotations)
+                    activities = group_activities(annotations, config=config)
                     stats = calculate_stats(activities)
                     total_activities += len(activities)
                     total_focus += stats['focus_percentage']
@@ -255,7 +304,7 @@ def get_timeline():
             
             annotations = load_annotations(daily_dir)
             if annotations:
-                activities = group_activities(annotations)
+                activities = group_activities(annotations, config=config)
                 
                 # Add date info to each activity
                 for activity in activities:
@@ -308,7 +357,7 @@ def get_timeline_by_date(date):
             })
         
         # Group into activities
-        activities = group_activities(annotations)
+        activities = group_activities(annotations, config=config)
         stats = calculate_stats(activities)
         
         # Prepare activity data
@@ -364,7 +413,7 @@ def search_activities():
             if not annotations:
                 continue
             
-            activities = group_activities(annotations)
+            activities = group_activities(annotations, config=config)
             
             for activity in activities:
                 # Apply filters
@@ -424,7 +473,7 @@ def get_analytics():
             if not annotations:
                 continue
             
-            activities = group_activities(annotations)
+            activities = group_activities(annotations, config=config)
             stats = calculate_stats(activities)
             
             daily_stats.append({
@@ -500,7 +549,7 @@ def export_csv():
         if not annotations:
             return jsonify({'error': 'No annotations found'}), 404
         
-        activities = group_activities(annotations)
+        activities = group_activities(annotations, config=config)
         
         # Create DataFrame
         data = []
@@ -548,7 +597,7 @@ def export_json():
         if not annotations:
             return jsonify({'error': 'No annotations found'}), 404
         
-        activities = group_activities(annotations)
+        activities = group_activities(annotations, config=config)
         stats = calculate_stats(activities)
         
         # Prepare export data
@@ -739,12 +788,19 @@ def main():
         logger.info(f"API Docs: http://localhost:8051/api/health")
         logger.info("=" * 60)
         
-        # Run server
+        # Run server with config
+        server_config = config.get('server', {})
+        host = server_config.get('host', '0.0.0.0')
+        port = server_config.get('port', 8051)
+        debug = server_config.get('debug', True)
+        
+        logger.info(f"Starting server on http://{host}:{port}")
+        
         socketio.run(
             app,
-            host='0.0.0.0',
-            port=8051,
-            debug=True,
+            host=host,
+            port=port,
+            debug=debug,
             allow_unsafe_werkzeug=True
         )
         

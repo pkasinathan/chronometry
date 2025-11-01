@@ -161,8 +161,15 @@ def categorize_activity(summary: str) -> Tuple[str, str, str]:
     return ('Work', '⚙️', '#E50914')
 
 
-def group_activities(annotations: List[Dict], gap_minutes: int = 5) -> List[Dict]:
+def group_activities(annotations: List[Dict], gap_minutes: int = None, config: dict = None) -> List[Dict]:
     """Group annotations into continuous activity blocks."""
+    # Get gap_minutes from config if not provided
+    if gap_minutes is None:
+        if config:
+            gap_minutes = config.get('timeline', {}).get('gap_minutes', 5)
+        else:
+            gap_minutes = 5
+    
     if not annotations:
         return []
     
@@ -1032,8 +1039,8 @@ def generate_timeline(config: dict, date: datetime = None):
     
     logger.info(f"Found {len(annotations)} annotations")
     
-    # Group into activities
-    activities = group_activities(annotations, gap_minutes=5)
+    # Group into activities using config
+    activities = group_activities(annotations, config=config)
     logger.info(f"Grouped into {len(activities)} activities")
     
     # Calculate statistics

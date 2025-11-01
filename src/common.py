@@ -16,54 +16,133 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def load_config(config_path: str = "config/config.yaml") -> dict:
-    """Load and validate configuration from YAML file.
+def deep_merge(base: dict, override: dict) -> dict:
+    """Deep merge two dictionaries.
     
     Args:
-        config_path: Path to YAML configuration file
+        base: Base dictionary (system config)
+        override: Override dictionary (user config)
+        
+    Returns:
+        Merged dictionary where override values take precedence
+    """
+    result = base.copy()
+    
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # Recursively merge nested dictionaries
+            result[key] = deep_merge(result[key], value)
+        else:
+            # Override with new value
+            result[key] = value
+    
+    return result
+
+
+def load_config(config_path: str = "config/config.yaml",
+                user_config_path: str = "config/user_config.yaml",
+                system_config_path: str = "config/system_config.yaml") -> dict:
+    """Load and validate configuration from YAML files.
+    
+    Supports two modes:
+    1. Split mode: Loads user_config.yaml + system_config.yaml and merges them
+    2. Legacy mode: Falls back to single config.yaml if split files don't exist
+    
+    Args:
+        config_path: Path to legacy single config file (backward compatibility)
+        user_config_path: Path to user config file
+        system_config_path: Path to system config file
         
     Returns:
         Validated configuration dictionary
         
     Raises:
-        FileNotFoundError: If config file doesn't exist
+        FileNotFoundError: If no config files found
         ValueError: If configuration is invalid
     """
-    config_file = Path(config_path)
+    user_config_file = Path(user_config_path)
+    system_config_file = Path(system_config_path)
+    legacy_config_file = Path(config_path)
     
-    # Check file exists
-    if not config_file.exists():
-        raise FileNotFoundError(
-            f"Configuration file not found: {config_path}\n"
-            f"Please ensure config.yaml exists in the current directory."
+    # Try loading split config files first (new method)
+    if user_config_file.exists() and system_config_file.exists():
+        logger.info("Loading split configuration (user + system)")
+        
+        try:
+            # Load system config (base)
+            with open(system_config_file, 'r') as f:
+                system_config = yaml.safe_load(f)
+            
+            # Load user config (overrides)
+            with open(user_config_file, 'r') as f:
+                user_config = yaml.safe_load(f)
+            
+            # Merge configs (user overrides system)
+            config = deep_merge(system_config, user_config)
+            
+            # Extract root_dir from paths if in system config
+            if 'paths' in config and 'root_dir' in config['paths']:
+                config['root_dir'] = config['paths']['root_dir']
+            
+            # Similarly for output_dir in timeline
+            if 'paths' in config and 'output_dir' in config['paths']:
+                if 'timeline' not in config:
+                    config['timeline'] = {}
+                config['timeline']['output_dir'] = config['paths']['output_dir']
+            
+            logger.info("Split configuration loaded successfully")
+            
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML syntax in split config files: {e}")
+    
+    # Fall back to legacy single config file
+    elif legacy_config_file.exists():
+        logger.warning(
+            f"Using legacy config file: {config_path}. "
+            "Consider migrating to user_config.yaml + system_config.yaml using bin/migrate_config.py"
         )
+        
+        try:
+            with open(legacy_config_file, 'r') as f:
+                config = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML syntax in config file: {e}")
     
-    # Load YAML
-    try:
-        with open(config_file, 'r') as f:
-            config = yaml.safe_load(f)
-    except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML syntax in config file: {e}")
+    else:
+        # No config files found
+        raise FileNotFoundError(
+            f"No configuration files found!\n"
+            f"Looked for:\n"
+            f"  - {user_config_path} + {system_config_path} (split mode)\n"
+            f"  - {config_path} (legacy mode)\n"
+            f"Please create configuration files or run bin/migrate_config.py"
+        )
     
     # Validate config is a dictionary
     if not isinstance(config, dict):
         raise ValueError("Configuration must be a dictionary")
     
     # Validate required sections
-    required_sections = ['root_dir', 'capture', 'annotation', 'timeline']
+    required_sections = ['capture', 'annotation', 'timeline']
     missing = [s for s in required_sections if s not in config]
     if missing:
         raise ValueError(
             f"Missing required configuration sections: {', '.join(missing)}"
         )
     
+    # Ensure root_dir exists (required)
+    if 'root_dir' not in config:
+        raise ValueError("root_dir is required in configuration")
+    
     # Validate capture settings
     if not isinstance(config['capture'], dict):
         raise ValueError("'capture' section must be a dictionary")
     
-    fps = config['capture'].get('fps', 0)
-    if not isinstance(fps, (int, float)) or fps < 0:
-        raise ValueError("capture.fps must be a non-negative number")
+    # Validate capture_interval_seconds (new) or fps (legacy)
+    capture_interval = config['capture'].get('capture_interval_seconds')
+    if capture_interval is not None:
+        if not isinstance(capture_interval, (int, float)) or capture_interval <= 0:
+            raise ValueError("capture.capture_interval_seconds must be a positive number")
     
     retention_days = config['capture'].get('retention_days', 0)
     if not isinstance(retention_days, int) or retention_days < 0:
@@ -81,10 +160,6 @@ def load_config(config_path: str = "config/config.yaml") -> dict:
     if not isinstance(batch_size, int) or batch_size < 1:
         raise ValueError("annotation.batch_size must be a positive integer")
     
-    timeout_sec = config['annotation'].get('timeout_sec', 30)
-    if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0:
-        raise ValueError("annotation.timeout_sec must be a positive number")
-    
     # Validate timeline settings
     if not isinstance(config['timeline'], dict):
         raise ValueError("'timeline' section must be a dictionary")
@@ -93,11 +168,7 @@ def load_config(config_path: str = "config/config.yaml") -> dict:
     if not isinstance(bucket_minutes, int) or bucket_minutes < 1:
         raise ValueError("timeline.bucket_minutes must be a positive integer")
     
-    min_tokens = config['timeline'].get('min_tokens_per_bucket', 0)
-    if not isinstance(min_tokens, int) or min_tokens < 0:
-        raise ValueError("timeline.min_tokens_per_bucket must be a non-negative integer")
-    
-    logger.info(f"Configuration loaded and validated successfully from {config_path}")
+    logger.info("Configuration loaded and validated successfully")
     return config
 
 

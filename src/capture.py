@@ -297,7 +297,8 @@ def capture_single_frame(config: dict, show_notifications: bool = True) -> bool:
     root_dir = config['root_dir']
     capture_config = config['capture']
     monitor_index = capture_config['monitor_index']
-    region = capture_config['region']
+    # Region is in system config
+    region = config.get('capture', {}).get('region')
     
     try:
         # Check if screen is locked
@@ -367,16 +368,16 @@ def capture_screen(config: dict):
     root_dir = config['root_dir']
     
     # Get capture settings
-    fps = capture_config['fps']
+    capture_interval_seconds = capture_config.get('capture_interval_seconds', 900)
     monitor_index = capture_config['monitor_index']
-    region = capture_config['region']
-    retention_days = capture_config.get('retention_days', 3)
+    region = capture_config.get('region')
+    retention_days = capture_config.get('retention_days', 1095)
     
-    # Calculate sleep interval
-    sleep_interval = 1.0 / fps if fps > 0 else 30.0
+    # Use capture interval directly
+    sleep_interval = capture_interval_seconds
     
     logger.info("Starting screen capture...")
-    logger.info(f"FPS: {fps} (capturing every {sleep_interval:.2f} seconds)")
+    logger.info(f"Capture interval: {capture_interval_seconds} seconds ({capture_interval_seconds/60:.1f} minutes)")
     logger.info(f"Monitor: {monitor_index}")
     logger.info(f"Region: {region if region else 'Full screen'}")
     logger.info(f"Saving to: {root_dir}/frames/")

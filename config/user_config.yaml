@@ -1,0 +1,49 @@
+# Chronometry User Configuration
+# ================================
+# User-editable settings exposed in the UI Settings tab
+# Changes take effect after restart or clicking "Save Changes" in the dashboard
+
+capture:
+  # How often to capture screenshots (in seconds)
+  # Examples: 900 = 15 min, 600 = 10 min, 1800 = 30 min
+  capture_interval_seconds: 900
+  
+  # Which monitor to capture (0=all monitors, 1=primary, 2=secondary, etc.)
+  monitor_index: 1
+  
+  # Days to keep screenshots before auto-deletion
+  retention_days: 1095
+
+annotation:
+  # Number of images to batch together for AI analysis
+  # Higher = more context but slower processing
+  batch_size: 4
+  
+  # Prompt for AI to use when analyzing screenshots
+  # Customize this to guide how your activities are described
+  prompt: "Summarize the type of task or activity shown in these images using clear, work-related terms. For example: Sending a Slack message in the #membership-de channel about a new feature. Another example: Editing the file xyz in Cursor IDE."
+
+digest:
+  # How often to regenerate digest (in seconds)
+  # Examples: 3600 = 1 hour, 7200 = 2 hours, 1800 = 30 minutes
+  interval_seconds: 3600
+  
+  # Your project ID for Copilot API
+  ncp_project_id: "pkasichronometry"
+
+timeline:
+  # Time window for grouping similar activities (minutes)
+  # Activities within this window are grouped together in the timeline
+  bucket_minutes: 30
+  
+  # Keywords to exclude from timeline (case-insensitive)
+  # Example: ["youtube", "reddit", "twitter", "facebook"]
+  exclude_keywords: ["youtube", "reddit", "x.com"]
+
+notifications:
+  # Enable desktop notifications
+  enabled: true
+  
+  # Show notification before each capture
+  notify_before_capture: true
+
