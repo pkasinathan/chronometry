@@ -4,6 +4,8 @@
 
 A privacy-first, AI-powered work activity analyzer that automatically captures, annotates, and summarizes your daily work. Features a beautiful web dashboard with real-time updates and AI-generated daily digests.
 
+> **🚀 New to Chronometry?** Start here: **[QUICK_START.md](QUICK_START.md)** - Get up and running in 5 minutes!
+
 ## ✨ What's New
 
 ### 🤖 **AI-Powered Daily Digest**
@@ -136,7 +138,7 @@ Your NGP will be private to you and used exclusively by this tool.
 capture:
   fps: 0.00111111              # 1 frame / 900 sec = every 15 min (default)
   monitor_index: 1             # Which monitor to capture (0 = all monitors)
-  retention_days: 1095         # Auto-delete after 3 years
+  retention_days: 1095         # Auto-delete after 3 years from your local MAC path
   region: null                 # Capture region [x, y, w, h] or null for full screen
 
 # AI annotation settings
@@ -465,8 +467,9 @@ GET  /api/export/json?date=<date>  # Export as JSON
 
 ## 📚 Documentation
 
-- **[README.md](README.md)** - This file - project overview and quick start
-- **[bin/README.md](bin/README.md)** - Complete shell script reference (all 7 scripts)
+- **[QUICK_START.md](QUICK_START.md)** - ⚡ Start here! 5-minute setup guide
+- **[README.md](README.md)** - This file - complete project documentation
+- **[bin/README.md](bin/README.md)** - Advanced shell script reference (all 7 scripts)
 - **[config/README.md](config/README.md)** - Configuration guide
 - **Script Headers** - Each .sh file has 50+ line documentation header
 - **Code Comments** - Inline documentation in all Python modules
@@ -730,6 +733,7 @@ For internal Netflix use. Ensure compliance with Netflix tool policies.
 
 ## 🚀 Getting Help
 
+- **Quick Start**: See [QUICK_START.md](QUICK_START.md) - 5-minute installation guide
 - **Script Reference**: See [bin/README.md](bin/README.md) - Complete guide to all 7 scripts
 - **Web Dashboard**: Visit http://localhost:8051 and explore the 5 tabs
 - **Configuration**: Edit `config/config.yaml` or use Settings tab in web UI
