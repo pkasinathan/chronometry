@@ -1,4 +1,6 @@
-# 🛠️ Chronometry Shell Scripts Reference
+# 🛠️ Chronometry Shell Scripts Reference (Advanced Users)
+
+**Tip:** For starting and managing Chronometry as a background service, just run `manage_services.sh` for an easy, streamlined setup.
 
 ## Overview
 
@@ -40,13 +42,13 @@ Chronometry includes 7 shell scripts that control different aspects of the syste
 
 **Process Flow**:
 ```
-capture.py (continuous - every 300 sec by default)
+capture.py (continuous - every 300 sec by default - configurable on settings page)
     ↓
-annotate.py (every 2 min)
+annotate.py (every 2 min - configurable on settings page)
     ↓
-timeline.py (every 5 min)
+timeline.py (every 5 min - configurable on settings page)
     ↓
-digest.py (configurable - default every 60 min)  ← INTEGRATED!
+digest.py (configurable - default every 60 min - configurable on settings page)
 ```
 
 **Console Output Example**:
@@ -284,7 +286,7 @@ ps aux | grep menubar  # Should return nothing
 ```
 ┌────────────────────────────────────────────────────┐
 │        Main Agent / Menu Bar App                   │
-│    (start_chronometry_agent.sh / menubar_app.py)│
+│    (start_chronometry_agent.sh / menubar_app.py)   │
 └────────────────┬───────────────────────────────────┘
                  │
                  ├─→ capture.py (continuous)
@@ -296,7 +298,7 @@ ps aux | grep menubar  # Should return nothing
                  ├─→ timeline.py (every 5 min)
                  │   └─→ HTML timeline
                  │
-                 └─→ digest.py (every 60 min)  ← INTEGRATED!
+                 └─→ digest.py (every 60 min)
                      └─→ AI daily summary
                      
                      ↓
@@ -312,11 +314,11 @@ ps aux | grep menubar  # Should return nothing
                      
                      ↑
                      │
-         ┌──────────────────────────┐
-         │    Web Server            │
+         ┌─────────────────────────────────────┐
+         │    Web Server                       │
          │  (start_chronometry_webserver.sh)   │
-         │    Port 8051             │
-         └──────────────────────────┘
+         │    Port 8051                        │
+         └─────────────────────────────────────┘
 ```
 
 ---
@@ -424,14 +426,14 @@ Then restart:
 
 ```bash
 # Start scripts
-./start_chronometry_agent.sh    # Main monitoring (terminal-based)
-./start_chronometry_menubar.sh                 # Menu bar app (macOS GUI)
-./start_chronometry_webserver.sh              # Web dashboard
+./start_chronometry_agent.sh     # Main monitoring (terminal-based)
+./start_chronometry_menubar.sh   # Menu bar app (macOS GUI)
+./start_chronometry_webserver.sh # Web dashboard
 
 # Stop scripts  
-./stop_chronometry_agent.sh     # Stop monitoring
-./stop_chronometry_menubar.sh                  # Stop menu bar app
-./stop_chronometry_webserver.sh                # Stop web server
+./stop_chronometry_agent.sh      # Stop monitoring
+./stop_chronometry_menubar.sh    # Stop menu bar app
+./stop_chronometry_webserver.sh  # Stop web server
 ```
 
 ### Manual Operations
@@ -795,12 +797,3 @@ launchctl unload ~/Library/LaunchAgents/user.chronometry.webserver.plist
 - **Production**: Use service mode for reliability and convenience
 
 ---
-
-## 📚 See Also
-
-- [START_HERE.md](START_HERE.md) - Getting started
-- [README.md](README.md) - Project overview  
-- [USER_GUIDE.md](USER_GUIDE.md) - User guide
-- [DIGEST_FEATURE.md](DIGEST_FEATURE.md) - Digest details
-- [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) - Architecture
-
