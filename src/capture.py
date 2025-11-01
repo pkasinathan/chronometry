@@ -7,7 +7,8 @@ from datetime import datetime
 import mss
 from PIL import Image
 from common import (
-    load_config, ensure_dir, cleanup_old_data, get_frame_path, get_monitor_config
+    load_config, ensure_dir, cleanup_old_data, get_frame_path, get_monitor_config,
+    show_notification, NotificationMessages
 )
 
 # Configure logging
@@ -16,23 +17,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-
-def show_notification(title: str, message: str, sound: bool = False):
-    """Show macOS notification using osascript."""
-    try:
-        script = f'display notification "{message}" with title "{title}"'
-        if sound:
-            script += ' sound name "default"'
-        
-        subprocess.run(
-            ['osascript', '-e', script],
-            capture_output=True,
-            timeout=5
-        )
-        logger.debug(f"Notification shown: {title} - {message}")
-    except Exception as e:
-        logger.warning(f"Failed to show notification: {e}")
 
 
 def is_screen_locked() -> bool:
@@ -203,14 +187,14 @@ def capture_region_interactive(config: dict, show_notifications: bool = True) ->
         # Check if screen is locked
         if is_screen_locked():
             if show_notifications:
-                show_notification("Chronometry", "🔒 Screen is locked - skipping capture")
+                show_notification("Chronometry", NotificationMessages.SCREEN_LOCKED)
             logger.info("Screen is locked - skipping capture")
             return False
         
         # Check if camera is in use
         if is_camera_in_use():
             if show_notifications:
-                show_notification("Chronometry", "📹 Camera active - skipping for privacy")
+                show_notification("Chronometry", NotificationMessages.CAMERA_ACTIVE)
             logger.info("Camera is in use - skipping capture for privacy")
             
             # Create synthetic annotation
@@ -225,7 +209,7 @@ def capture_region_interactive(config: dict, show_notifications: bool = True) ->
         
         # Show notification about region selection
         if show_notifications:
-            show_notification("Chronometry", "📸 Select region to capture (Esc to cancel)")
+            show_notification("Chronometry", NotificationMessages.SELECT_REGION)
         
         # Create temporary file for screenshot
         temp_fd, temp_path = tempfile.mkstemp(suffix='.png')
@@ -245,7 +229,7 @@ def capture_region_interactive(config: dict, show_notifications: bool = True) ->
             if not temp_file.exists() or temp_file.stat().st_size == 0:
                 logger.info("Region capture cancelled by user")
                 if show_notifications:
-                    show_notification("Chronometry", "❌ Region capture cancelled")
+                    show_notification("Chronometry", NotificationMessages.REGION_CANCELLED)
                 return False
             
             # Move to proper location with timestamp
@@ -260,7 +244,7 @@ def capture_region_interactive(config: dict, show_notifications: bool = True) ->
             logger.info(f"Captured region: {frame_path.name}")
             
             if show_notifications:
-                show_notification("Chronometry", f"✅ Region screenshot saved: {frame_path.name}")
+                show_notification("Chronometry", NotificationMessages.REGION_SAVED.format(filename=frame_path.name))
             
             return True
             
@@ -275,12 +259,12 @@ def capture_region_interactive(config: dict, show_notifications: bool = True) ->
     except subprocess.TimeoutExpired:
         logger.warning("Region capture timed out")
         if show_notifications:
-            show_notification("Chronometry", "⏱️ Region capture timed out")
+            show_notification("Chronometry", NotificationMessages.REGION_TIMEOUT)
         return False
     except Exception as e:
         logger.error(f"Error capturing region: {e}", exc_info=True)
         if show_notifications:
-            show_notification("Chronometry", f"❌ Capture failed: {str(e)}")
+            show_notification("Chronometry", NotificationMessages.CAPTURE_FAILED.format(error=str(e)))
         return False
 
 
@@ -304,14 +288,14 @@ def capture_single_frame(config: dict, show_notifications: bool = True) -> bool:
         # Check if screen is locked
         if is_screen_locked():
             if show_notifications:
-                show_notification("Chronometry", "🔒 Screen is locked - skipping capture")
+                show_notification("Chronometry", NotificationMessages.SCREEN_LOCKED)
             logger.info("Screen is locked - skipping capture")
             return False
         
         # Check if camera is in use
         if is_camera_in_use():
             if show_notifications:
-                show_notification("Chronometry", "📹 Camera active - skipping for privacy")
+                show_notification("Chronometry", NotificationMessages.CAMERA_ACTIVE)
             logger.info("Camera is in use - skipping capture for privacy")
             
             # Create synthetic annotation
@@ -351,15 +335,122 @@ def capture_single_frame(config: dict, show_notifications: bool = True) -> bool:
             logger.info(f"Captured: {frame_path.name}")
             
             if show_notifications:
-                show_notification("Chronometry", f"✅ Screenshot saved: {frame_path.name}")
+                show_notification("Chronometry", NotificationMessages.SCREENSHOT_SAVED.format(filename=frame_path.name))
             
             return True
             
     except Exception as e:
         logger.error(f"Error capturing frame: {e}", exc_info=True)
         if show_notifications:
-            show_notification("Chronometry", f"❌ Capture failed: {str(e)}")
+            show_notification("Chronometry", NotificationMessages.CAPTURE_FAILED.format(error=str(e)))
         return False
+
+
+def capture_iteration(
+    sct: mss.mss,
+    monitor: dict,
+    root_dir: str,
+    is_first_capture: bool,
+    notifications_enabled: bool,
+    pre_notify_enabled: bool,
+    pre_notify_seconds: int,
+    pre_notify_sound: bool
+) -> dict:
+    """Execute one iteration of the capture loop.
+    
+    Args:
+        sct: mss.mss screenshot context manager
+        monitor: Monitor configuration dict
+        root_dir: Root directory for saving frames
+        is_first_capture: Whether this is the first capture in session
+        notifications_enabled: Whether notifications are enabled
+        pre_notify_enabled: Whether pre-capture notifications are enabled
+        pre_notify_seconds: Seconds to wait after pre-notification
+        pre_notify_sound: Whether to play sound with pre-notification
+        
+    Returns:
+        dict with keys:
+            - 'status': 'captured', 'skipped_locked', 'skipped_camera', 'error'
+            - 'showed_pre_notification': bool
+            - 'frame_path': Path if captured, None otherwise
+            - 'error': Exception if error occurred, None otherwise
+    """
+    result = {
+        'status': None,
+        'showed_pre_notification': False,
+        'frame_path': None,
+        'error': None
+    }
+    
+    try:
+        # Check if screen is locked
+        if is_screen_locked():
+            logger.info("🔒 Screen is locked - skipping capture")
+            if notifications_enabled:
+                show_notification("Chronometry", NotificationMessages.SCREEN_LOCKED)
+            result['status'] = 'skipped_locked'
+            return result
+        
+        # Check if camera is in use (video calls, etc.)
+        if is_camera_in_use():
+            logger.info("📹 Camera is in use - skipping capture for privacy")
+            if notifications_enabled:
+                show_notification("Chronometry", NotificationMessages.CAMERA_ACTIVE)
+            
+            # Create synthetic annotation to track the meeting time
+            timestamp = datetime.now()
+            create_synthetic_annotation(
+                root_dir=root_dir,
+                timestamp=timestamp,
+                reason="camera_active",
+                summary="In a video meeting or call - screenshot skipped for privacy"
+            )
+            result['status'] = 'skipped_camera'
+            return result
+        
+        # Optional per-capture pre-notification (skip on first capture)
+        logger.debug(f"Pre-notification check: notif_enabled={notifications_enabled}, pre_notify_enabled={pre_notify_enabled}, pre_notify_seconds={pre_notify_seconds}, is_first_capture={is_first_capture}")
+        if (
+            notifications_enabled and pre_notify_enabled and pre_notify_seconds > 0 and not is_first_capture
+        ):
+            logger.info(f"⏰ Showing pre-capture warning: {pre_notify_seconds} seconds")
+            show_notification(
+                "Chronometry",
+                NotificationMessages.PRE_CAPTURE.format(seconds=pre_notify_seconds),
+                sound=pre_notify_sound
+            )
+            time.sleep(pre_notify_seconds)
+            # Add extra delay to ensure notification banner has disappeared from screen
+            # macOS notification banners can persist 3-5 seconds, using 2 seconds for safety
+            time.sleep(2)
+            result['showed_pre_notification'] = True
+        else:
+            logger.debug(f"Skipping pre-notification (first_capture={is_first_capture})")
+
+        # Capture screenshot (no notification at capture moment to avoid it appearing in screenshot)
+        timestamp = datetime.now()
+        frame_path = get_frame_path(root_dir, timestamp)
+        
+        # Ensure directory exists
+        ensure_dir(frame_path.parent)
+        
+        # Take screenshot
+        screenshot = sct.grab(monitor)
+        
+        # Convert to PIL Image and save
+        img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
+        img.save(str(frame_path), "PNG")
+        
+        logger.info(f"Captured: {frame_path.name}")
+        result['status'] = 'captured'
+        result['frame_path'] = frame_path
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in capture iteration: {e}")
+        result['status'] = 'error'
+        result['error'] = e
+        return result
 
 
 def capture_screen(config: dict):
@@ -375,18 +466,29 @@ def capture_screen(config: dict):
     
     # Use capture interval directly
     sleep_interval = capture_interval_seconds
+
+    # Notification preferences (per-capture pre-notification)
+    notifications = config.get('notifications', {})
+    notif_enabled = notifications.get('enabled', True)
+    pre_notify_enabled = notifications.get('notify_before_capture', False)
+    pre_notify_seconds = int(notifications.get('pre_capture_warning_seconds', 5) or 0)
+    pre_notify_sound = bool(notifications.get('pre_capture_sound', False))
     
     logger.info("Starting screen capture...")
     logger.info(f"Capture interval: {capture_interval_seconds} seconds ({capture_interval_seconds/60:.1f} minutes)")
     logger.info(f"Monitor: {monitor_index}")
     logger.info(f"Region: {region if region else 'Full screen'}")
     logger.info(f"Saving to: {root_dir}/frames/")
+    logger.info(f"Notifications enabled: {notif_enabled}")
+    logger.info(f"Pre-capture notification enabled: {pre_notify_enabled}")
+    logger.info(f"Pre-capture warning seconds: {pre_notify_seconds}")
+    logger.info(f"Pre-capture sound: {pre_notify_sound}")
     logger.info("Press Ctrl+C to stop")
     
     # Show initial notification warning
     show_notification(
         "Chronometry Starting",
-        "Screen capture will begin in 5 seconds. Hide any sensitive data.",
+        NotificationMessages.STARTUP,
         sound=True
     )
     logger.info("⚠️ Notification shown: Capture starting in 5 seconds...")
@@ -410,7 +512,9 @@ def capture_screen(config: dict):
         skipped_locked = 0
         
         try:
+            is_first_capture = True
             while True:
+                result = {'showed_pre_notification': False}  # Default result
                 try:
                     # Cleanup old data periodically (once per hour)
                     current_time = time.time()
@@ -421,87 +525,60 @@ def capture_screen(config: dict):
                         except Exception as cleanup_error:
                             logger.warning(f"Cleanup failed: {cleanup_error}")
                     
-                    # Check if screen is locked
-                    if is_screen_locked():
-                        logger.info("🔒 Screen is locked - skipping capture")
-                        show_notification("Chronometry", "🔒 Screen locked - capture skipped")
+                    # Execute one capture iteration
+                    result = capture_iteration(
+                        sct=sct,
+                        monitor=monitor,
+                        root_dir=root_dir,
+                        is_first_capture=is_first_capture,
+                        notifications_enabled=notif_enabled,
+                        pre_notify_enabled=pre_notify_enabled,
+                        pre_notify_seconds=pre_notify_seconds,
+                        pre_notify_sound=pre_notify_sound
+                    )
+                    
+                    # Handle result
+                    if result['status'] == 'captured':
+                        capture_count += 1
+                        error_count = 0  # Reset error count on success
+                        is_first_capture = False  # After first capture, enable pre-notifications
+                    elif result['status'] == 'skipped_locked':
                         skipped_locked += 1
-                        time.sleep(sleep_interval)
-                        continue
-                    
-                    # Check if camera is in use (video calls, etc.)
-                    if is_camera_in_use():
-                        logger.info("📹 Camera is in use - skipping capture for privacy")
-                        show_notification("Chronometry", "📹 Camera active - capture skipped")
+                    elif result['status'] == 'error':
+                        error_count += 1
+                        logger.error(f"Error capturing frame (error {error_count}): {result['error']}")
                         
-                        # Create synthetic annotation to track the meeting time
-                        timestamp = datetime.now()
-                        create_synthetic_annotation(
-                            root_dir=root_dir,
-                            timestamp=timestamp,
-                            reason="camera_active",
-                            summary="In a video meeting or call - screenshot skipped for privacy"
-                        )
-                        
-                        time.sleep(sleep_interval)
-                        continue
-                    
-                    # Show notification before capture
-                    show_notification("Chronometry", "📸 Capturing screenshot now...")
-                    
-                    # Capture screenshot
-                    timestamp = datetime.now()
-                    frame_path = get_frame_path(root_dir, timestamp)
-                    
-                    # Ensure directory exists
-                    ensure_dir(frame_path.parent)
-                    
-                    # Take screenshot
-                    screenshot = sct.grab(monitor)
-                    
-                    # Convert to PIL Image and save
-                    img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
-                    img.save(str(frame_path), "PNG")
-                    
-                    logger.info(f"Captured: {frame_path.name}")
-                    capture_count += 1
-                    
-                    # Reset error count on successful capture
-                    error_count = 0
+                        # If too many consecutive errors, exit
+                        if error_count >= max_consecutive_errors:
+                            logger.critical(
+                                f"Too many consecutive errors ({error_count}). "
+                                "Stopping capture process."
+                            )
+                            break
+                        logger.info("Continuing capture loop...")
                     
                 except KeyboardInterrupt:
                     # Re-raise to be caught by outer handler
                     raise
-                    
-                except Exception as capture_error:
-                    # Log error but continue capturing
-                    error_count += 1
-                    logger.error(f"Error capturing frame (error {error_count}): {capture_error}")
-                    
-                    # If too many consecutive errors, exit
-                    if error_count >= max_consecutive_errors:
-                        logger.critical(
-                            f"Too many consecutive errors ({error_count}). "
-                            "Stopping capture process."
-                        )
-                        break
-                    
-                    logger.info("Continuing capture loop...")
                 
-                # Sleep until next capture
-                time.sleep(sleep_interval)
+                # Sleep until next capture, compensating for pre-notification delay to keep cadence
+                post_sleep = sleep_interval
+                if result.get('showed_pre_notification', False):
+                    # Account for both pre_notify_seconds and the 2 second notification disappear delay
+                    post_sleep = max(sleep_interval - pre_notify_seconds - 2, 0)
+                time.sleep(post_sleep)
                 
         except KeyboardInterrupt:
             logger.info("\nCapture stopped by user")
             show_notification(
                 "Chronometry Stopped",
-                f"Screen capture ended. {capture_count} frames captured."
+                NotificationMessages.STOPPED_WITH_COUNT.format(count=capture_count)
             )
         except Exception as e:
             logger.error(f"Fatal error during capture: {e}", exc_info=True)
             show_notification(
                 "Chronometry Error",
-                "Screen capture stopped due to an error."
+                NotificationMessages.ERROR_STOPPED
             )
 
 

@@ -101,7 +101,9 @@ def get_config():
         },
         'notifications': {
             'enabled': config.get('notifications', {}).get('enabled', True),
-            'notify_before_capture': config.get('notifications', {}).get('notify_before_capture', True)
+            'notify_before_capture': config.get('notifications', {}).get('notify_before_capture', True),
+            'pre_capture_warning_seconds': config.get('notifications', {}).get('pre_capture_warning_seconds', 5),
+            'pre_capture_sound': config.get('notifications', {}).get('pre_capture_sound', False)
         }
     })
 
@@ -210,6 +212,10 @@ def update_config():
                     updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('enabled', current_config.get('notifications', {}).get('enabled', True))).lower()}", line)
                 elif re.match(r'^\s+notify_before_capture:', line):
                     updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('notify_before_capture', current_config.get('notifications', {}).get('notify_before_capture', True))).lower()}", line)
+                elif re.match(r'^\s+pre_capture_warning_seconds:', line):
+                    updated_line = re.sub(r':\s*\d+', f": {updates['notifications'].get('pre_capture_warning_seconds', current_config.get('notifications', {}).get('pre_capture_warning_seconds', 5))}", line)
+                elif re.match(r'^\s+pre_capture_sound:', line):
+                    updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('pre_capture_sound', current_config.get('notifications', {}).get('pre_capture_sound', False))).lower()}", line)
             
             updated_lines.append(updated_line)
         

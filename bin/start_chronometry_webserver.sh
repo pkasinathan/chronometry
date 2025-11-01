@@ -100,11 +100,15 @@ if ! python -c "import flask" 2>/dev/null; then
     pip install -r requirements.txt
 fi
 
-# Check if config exists
-if [ ! -f "config/config.yaml" ]; then
-    echo "❌ config/config.yaml not found!"
-    echo "Please ensure config/config.yaml exists in the config directory"
-    exit 1
+# Verify config files exist (either split config or legacy)
+if [ ! -f "config/user_config.yaml" ] || [ ! -f "config/system_config.yaml" ]; then
+    if [ ! -f "config/config.yaml" ]; then
+        echo "❌ Configuration files not found"
+        echo "Please ensure either:"
+        echo "  - config/user_config.yaml AND config/system_config.yaml exist (preferred)"
+        echo "  - OR config/config.yaml exists (legacy)"
+        exit 1
+    fi
 fi
 
 echo ""

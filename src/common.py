@@ -3,6 +3,7 @@
 import os
 import yaml
 import logging
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 import shutil
@@ -14,6 +15,69 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# Notification message constants
+class NotificationMessages:
+    """Centralized notification messages for consistency.
+    
+    Usage examples:
+        show_notification("Title", NotificationMessages.STARTUP)
+        show_notification("Title", NotificationMessages.PRE_CAPTURE.format(seconds=5))
+        show_notification("Title", NotificationMessages.SCREENSHOT_SAVED.format(filename="test.png"))
+    """
+    # Startup and status messages
+    STARTUP = "Screen capture will begin in 5 seconds. Hide any sensitive data."
+    STOPPED = "Screen capture stopped"
+    STOPPED_WITH_COUNT = "Screen capture ended. {count} frames captured."
+    ERROR_STOPPED = "Screen capture stopped due to an error."
+    PAUSED = "Screen capture is paused. Click Resume to continue."
+    RESUMED = "Screen capture has resumed."
+    
+    # Pre-capture warnings
+    PRE_CAPTURE = "📸 Capturing in {seconds} seconds - Hide sensitive data now!"
+    
+    # Skip conditions
+    SCREEN_LOCKED = "🔒 Screen locked - capture skipped"
+    CAMERA_ACTIVE = "📹 Camera active - capture skipped"
+    
+    # Success messages
+    SCREENSHOT_SAVED = "✅ Screenshot saved: {filename}"
+    REGION_SAVED = "✅ Region screenshot saved: {filename}"
+    
+    # Region capture messages
+    SELECT_REGION = "📸 Select region to capture (Esc to cancel)"
+    REGION_CANCELLED = "❌ Region capture cancelled"
+    REGION_TIMEOUT = "⏱️ Region capture timed out"
+    
+    # Error messages
+    CAPTURE_FAILED = "❌ Capture failed: {error}"
+    ANNOTATION_ERROR = "❌ Annotation Error: {error}"
+    TIMELINE_ERROR = "❌ Timeline Error: {error}"
+    DIGEST_ERROR = "❌ Digest Error: {error}"
+
+
+def show_notification(title: str, message: str, sound: bool = False):
+    """Show macOS notification using osascript.
+    
+    Args:
+        title: Notification title
+        message: Notification message
+        sound: Whether to play notification sound
+    """
+    try:
+        script = f'display notification "{message}" with title "{title}"'
+        if sound:
+            script += ' sound name "default"'
+        
+        subprocess.run(
+            ['osascript', '-e', script],
+            capture_output=True,
+            timeout=5
+        )
+        logger.debug(f"Notification shown: {title} - {message}")
+    except Exception as e:
+        logger.warning(f"Failed to show notification: {e}")
 
 
 def deep_merge(base: dict, override: dict) -> dict:

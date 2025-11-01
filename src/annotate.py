@@ -253,10 +253,11 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
         logger.info(f"All frames already annotated")
         return 0
     
-    # Check if we have enough frames for a batch
+    # Note: We'll annotate even if we have fewer than batch_size frames
+    # This ensures frames don't wait indefinitely (e.g., manual captures, end of day)
+    # The API can handle any batch size from 1 to batch_size
     if len(unannotated) < batch_size:
-        logger.info(f"Only {len(unannotated)} unannotated frames across checked dates, waiting for {batch_size} (batch_size)")
-        return 0
+        logger.info(f"Found {len(unannotated)} unannotated frames (less than batch_size={batch_size}), annotating anyway")
     
     # Sort all unannotated frames by timestamp to maintain chronological order
     unannotated.sort()

@@ -1382,6 +1382,26 @@
                                         Show a notification before taking each screenshot
                                     </div>
                                 </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-label">Pre-Capture Warning Time (seconds)</label>
+                                    <input type="number" v-model.number="settings.notifications.pre_capture_warning_seconds" 
+                                           class="settings-input" min="0" max="30" step="1">
+                                    <div class="settings-hint">
+                                        How many seconds before each capture to show a warning notification<br>
+                                        Set to 0 to disable. Recommended: 5 seconds to hide sensitive data
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field">
+                                    <label class="settings-checkbox-label">
+                                        <input type="checkbox" v-model="settings.notifications.pre_capture_sound" class="settings-checkbox">
+                                        <span>Play Sound on Pre-Capture Warning</span>
+                                    </label>
+                                    <div class="settings-hint">
+                                        Play an audio alert when showing the pre-capture warning
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -1499,7 +1519,9 @@
                         },
                         notifications: {
                             enabled: true,
-                            notify_before_capture: true
+                            notify_before_capture: true,
+                            pre_capture_warning_seconds: 5,
+                            pre_capture_sound: false
                         }
                     },
                     availableDates: [],

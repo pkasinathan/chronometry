@@ -11,11 +11,11 @@ import subprocess
 import webbrowser
 from pynput import keyboard
 
-from capture import capture_screen, capture_single_frame, capture_region_interactive, show_notification, is_screen_locked, is_camera_in_use, create_synthetic_annotation
+from capture import capture_screen, capture_single_frame, capture_region_interactive, is_screen_locked, is_camera_in_use, create_synthetic_annotation, capture_iteration
 from annotate import annotate_frames
 from timeline import generate_timeline
 from digest import generate_daily_digest
-from common import load_config
+from common import load_config, show_notification, NotificationMessages
 
 # Configure logging
 logging.basicConfig(
@@ -122,7 +122,7 @@ class ChronometryApp(rumps.App):
         # Show notification
         show_notification(
             "Chronometry Starting",
-            "Screen capture will begin in 5 seconds. Hide any sensitive data.",
+            NotificationMessages.STARTUP,
             sound=True
         )
         
@@ -171,7 +171,7 @@ class ChronometryApp(rumps.App):
         # Show notification
         show_notification(
             "Chronometry Stopped",
-            f"Screen capture ended. {self.capture_count} frames captured."
+            NotificationMessages.STOPPED_WITH_COUNT.format(count=self.capture_count)
         )
         
         self.update_menu_state()
@@ -188,14 +188,14 @@ class ChronometryApp(rumps.App):
             self.pause_event.clear()
             show_notification(
                 "Chronometry Paused",
-                "Screen capture is paused. Click Resume to continue."
+                NotificationMessages.PAUSED
             )
             logger.info("⏸️ Capture paused")
         else:
             self.pause_event.set()
             show_notification(
                 "Chronometry Resumed",
-                "Screen capture has resumed."
+                NotificationMessages.RESUMED
             )
             logger.info("▶️ Capture resumed")
         
@@ -207,8 +207,17 @@ class ChronometryApp(rumps.App):
         from PIL import Image
         from common import get_frame_path, ensure_dir, cleanup_old_data, get_monitor_config
         
-        # Check if notifications are enabled
-        notifications_enabled = self.config.get('notifications', {}).get('enabled', True)
+        # Notification preferences (per-capture pre-notification)
+        notifications = self.config.get('notifications', {})
+        notifications_enabled = notifications.get('enabled', True)
+        pre_notify_enabled = notifications.get('notify_before_capture', False)
+        pre_notify_seconds = int(notifications.get('pre_capture_warning_seconds', 5) or 0)
+        pre_notify_sound = bool(notifications.get('pre_capture_sound', False))
+        
+        logger.info(f"Notifications enabled: {notifications_enabled}")
+        logger.info(f"Pre-capture notification enabled: {pre_notify_enabled}")
+        logger.info(f"Pre-capture warning seconds: {pre_notify_seconds}")
+        logger.info(f"Pre-capture sound: {pre_notify_sound}")
         
         # Wait 5 seconds after notification (startup delay from system config)
         # Note: In system_config.yaml this is under capture.startup_delay_seconds
@@ -231,6 +240,8 @@ class ChronometryApp(rumps.App):
         sleep_interval = capture_interval_seconds
         
         last_cleanup = 0
+        error_count = 0
+        max_consecutive_errors = 5
         
         with mss.mss() as sct:
             monitors = sct.monitors
@@ -241,7 +252,9 @@ class ChronometryApp(rumps.App):
                 logger.error(f"Configuration error: {e}")
                 return
             
+            is_first_capture = True
             while not self.stop_event.is_set():
+                result = {'showed_pre_notification': False}  # Default result
                 try:
                     # Wait if paused
                     if self.is_paused:
@@ -257,56 +270,69 @@ class ChronometryApp(rumps.App):
                         except Exception as cleanup_error:
                             logger.warning(f"Cleanup failed: {cleanup_error}")
                     
-                    # Check if screen is locked
-                    if is_screen_locked():
-                        logger.info("🔒 Screen is locked - skipping capture")
-                        if notifications_enabled:
-                            show_notification("Chronometry", "🔒 Screen locked - capture skipped")
+                    # Execute one capture iteration using shared function
+                    result = capture_iteration(
+                        sct=sct,
+                        monitor=monitor,
+                        root_dir=root_dir,
+                        is_first_capture=is_first_capture,
+                        notifications_enabled=notifications_enabled,
+                        pre_notify_enabled=pre_notify_enabled,
+                        pre_notify_seconds=pre_notify_seconds,
+                        pre_notify_sound=pre_notify_sound
+                    )
+                    
+                    # Handle result and update statistics
+                    if result['status'] == 'captured':
+                        self.capture_count += 1
+                        is_first_capture = False
+                        error_count = 0  # Reset error count on successful capture
+                    elif result['status'] == 'skipped_locked':
                         self.skipped_locked += 1
-                        time.sleep(sleep_interval)
-                        continue
-                    
-                    # Check if camera is in use (video calls, etc.)
-                    if is_camera_in_use():
-                        logger.info("📹 Camera is in use - skipping capture for privacy")
-                        if notifications_enabled:
-                            show_notification("Chronometry", "📹 Camera active - capture skipped")
-                        
-                        # Create synthetic annotation to track the meeting time
-                        timestamp = datetime.now()
-                        create_synthetic_annotation(
-                            root_dir=root_dir,
-                            timestamp=timestamp,
-                            reason="camera_active",
-                            summary="In a video meeting or call - screenshot skipped for privacy"
-                        )
-                        
+                    elif result['status'] == 'skipped_camera':
                         self.skipped_camera += 1
-                        time.sleep(sleep_interval)
-                        continue
-                    
-                    # Show notification before capture (if enabled and configured)
-                    notify_before_capture = self.config.get('notifications', {}).get('notify_before_capture', True)
-                    if notifications_enabled and notify_before_capture:
-                        show_notification("Chronometry", "📸 Capturing screenshot now...")
-                    
-                    # Capture screenshot
-                    timestamp = datetime.now()
-                    frame_path = get_frame_path(root_dir, timestamp)
-                    
-                    ensure_dir(frame_path.parent)
-                    
-                    screenshot = sct.grab(monitor)
-                    img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
-                    img.save(str(frame_path), "PNG")
-                    
-                    logger.info(f"Captured: {frame_path.name}")
-                    self.capture_count += 1
+                    elif result['status'] == 'error':
+                        error_count += 1
+                        logger.error(f"Error in capture iteration (error {error_count}): {result['error']}")
+                        
+                        # If too many consecutive errors, stop capture
+                        if error_count >= max_consecutive_errors:
+                            logger.critical(
+                                f"Too many consecutive errors ({error_count}). "
+                                "Stopping capture process."
+                            )
+                            self.stop_event.set()
+                            show_notification(
+                                "Chronometry Error",
+                                f"Capture stopped after {error_count} consecutive errors."
+                            )
+                            break
+                        logger.info("Continuing capture loop...")
                     
                 except Exception as e:
-                    logger.error(f"Error in capture loop: {e}")
+                    error_count += 1
+                    logger.error(f"Error in capture loop (error {error_count}): {e}")
+                    
+                    # If too many consecutive errors, stop capture
+                    if error_count >= max_consecutive_errors:
+                        logger.critical(
+                            f"Too many consecutive errors ({error_count}). "
+                            "Stopping capture process."
+                        )
+                        self.stop_event.set()
+                        show_notification(
+                            "Chronometry Error",
+                            f"Capture stopped after {error_count} consecutive errors."
+                        )
+                        break
+                    logger.info("Continuing capture loop...")
                 
-                time.sleep(sleep_interval)
+                # Sleep until next capture, compensating for pre-notification delay to keep cadence
+                post_sleep = sleep_interval
+                if result.get('showed_pre_notification', False):
+                    # Account for both pre_notify_seconds and the 2 second notification disappear delay
+                    post_sleep = max(sleep_interval - pre_notify_seconds - 2, 0)
+                time.sleep(post_sleep)
     
     def _annotation_loop(self):
         """Periodic annotation, timeline generation, and digest creation."""
@@ -341,15 +367,36 @@ class ChronometryApp(rumps.App):
             
             current_time = time.time()
             
-            # Run annotation based on calculated interval
-            if current_time - last_annotation >= annotation_interval:
-                try:
-                    logger.info(f"Running periodic annotation (batch_size={batch_size})...")
+            # Run annotation based on EITHER frame count OR time interval
+            # Check if enough unannotated frames exist
+            try:
+                from pathlib import Path
+                root_dir = self.config['root_dir']
+                today = datetime.now().strftime('%Y-%m-%d')
+                frames_dir = Path(root_dir) / 'frames' / today
+                
+                unannotated_count = 0
+                if frames_dir.exists():
+                    for png_file in frames_dir.glob('*.png'):
+                        json_file = png_file.with_suffix('.json')
+                        if not json_file.exists():
+                            unannotated_count += 1
+                
+                # Run annotation if EITHER condition is met:
+                # 1. Enough frames accumulated (>= batch_size)
+                # 2. Time interval elapsed AND at least 1 frame exists
+                should_annotate = (
+                    unannotated_count >= batch_size or
+                    (current_time - last_annotation >= annotation_interval and unannotated_count > 0)
+                )
+                
+                if should_annotate:
+                    logger.info(f"Running periodic annotation ({unannotated_count} unannotated frames, batch_size={batch_size})...")
                     annotate_frames(self.config)
                     last_annotation = current_time
                     logger.info("Annotation completed")
-                except Exception as e:
-                    logger.error(f"Annotation failed: {e}")
+            except Exception as e:
+                logger.error(f"Annotation failed: {e}")
             
             # Run timeline every 5 minutes
             if current_time - last_timeline >= timeline_interval:
@@ -395,7 +442,7 @@ class ChronometryApp(rumps.App):
                 logger.error(f"Manual capture failed: {e}")
                 show_notification(
                     "Chronometry",
-                    f"Capture Failed: {str(e)}"
+                    f"❌ Capture failed: {str(e)}"
                 )
         
         # Run in background thread to not block UI
@@ -434,6 +481,7 @@ class ChronometryApp(rumps.App):
         
         def run():
             try:
+                batch_size = self.config['annotation'].get('batch_size', 4)
                 count = annotate_frames(self.config)
                 if count > 0:
                     show_notification(
@@ -443,11 +491,11 @@ class ChronometryApp(rumps.App):
                 else:
                     show_notification(
                         "Chronometry",
-                        "⏳ Waiting for more frames to reach batch size (need 3)"
+                        f"⏳ Waiting for more frames to reach batch size (need {batch_size})"
                     )
             except Exception as e:
                 logger.error(f"Annotation failed: {e}")
-                show_notification("Chronometry", f"❌ Annotation Error: {str(e)}")
+                show_notification("Chronometry", NotificationMessages.ANNOTATION_ERROR.format(error=str(e)))
         
         threading.Thread(target=run, daemon=True).start()
     
@@ -468,7 +516,7 @@ class ChronometryApp(rumps.App):
                 )
             except Exception as e:
                 logger.error(f"Timeline generation failed: {e}")
-                show_notification("Chronometry", f"❌ Timeline Error: {str(e)}")
+                show_notification("Chronometry", NotificationMessages.TIMELINE_ERROR.format(error=str(e)))
         
         threading.Thread(target=run, daemon=True).start()
     
@@ -490,10 +538,10 @@ class ChronometryApp(rumps.App):
                         f"✅ Digest Generated - {digest['total_activities']} activities summarized"
                     )
                 else:
-                    show_notification("Chronometry", f"⚠️ Digest Error: {digest['error']}")
+                    show_notification("Chronometry", NotificationMessages.DIGEST_ERROR.format(error=digest['error']))
             except Exception as e:
                 logger.error(f"Digest generation failed: {e}")
-                show_notification("Chronometry", f"❌ Digest Error: {str(e)}")
+                show_notification("Chronometry", NotificationMessages.DIGEST_ERROR.format(error=str(e)))
         
         threading.Thread(target=run, daemon=True).start()
     

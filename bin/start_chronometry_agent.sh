@@ -74,11 +74,15 @@ if ! python -c "import mss, PIL, yaml, plotly, pandas" 2>/dev/null; then
     exit 1
 fi
 
-# Verify config file exists
-if [ ! -f "config/config.yaml" ]; then
-    echo "Error: config/config.yaml not found"
-    echo "Please create a config/config.yaml file in the config directory."
-    exit 1
+# Verify config files exist (either split config or legacy)
+if [ ! -f "config/user_config.yaml" ] || [ ! -f "config/system_config.yaml" ]; then
+    if [ ! -f "config/config.yaml" ]; then
+        echo "Error: Configuration files not found"
+        echo "Please ensure either:"
+        echo "  - config/user_config.yaml AND config/system_config.yaml exist (preferred)"
+        echo "  - OR config/config.yaml exists (legacy)"
+        exit 1
+    fi
 fi
 
 set +e  # Allow errors in the main loop
