@@ -8,7 +8,7 @@ capture:
   # Frames per second - used to calculate sleep interval between captures
   # 0.00333333 = 1/300, so captures every 300 seconds
   # Formula: sleep_interval = 1.0 / fps
-  fps: 0.00333333
+  fps: 0.00111111
   
   # Which monitor to capture from (0 = all monitors on macOS, 1+ = specific monitor)
   # Used directly in mss.grab(monitors[monitor_index])
@@ -35,7 +35,7 @@ annotation:
   
   # Number of images to send per API request
   # annotate.py processes PNGs in batches of this size
-  batch_size: 3
+  batch_size: 4
   
   # Command timeout in seconds
   # Passed to subprocess.run(timeout=timeout_sec) for metatron curl

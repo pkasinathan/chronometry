@@ -20,6 +20,47 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def deduplicate_batch_annotations(annotations: List[Dict]) -> List[Dict]:
+    """Group annotations from the same batch into single entries.
+    
+    When batch_size > 1, the same summary is saved to multiple image files.
+    This function groups them into single entries with all frames attached.
+    """
+    if not annotations:
+        return []
+    
+    deduplicated = []
+    seen_summaries = {}  # summary -> group dict
+    
+    for annotation in sorted(annotations, key=lambda x: x['datetime']):
+        summary = annotation.get('summary', '')
+        batch_size = annotation.get('batch_size', 1)
+        
+        # Only deduplicate if batch_size > 1 and we have a summary
+        if batch_size > 1 and summary:
+            # Check if we've seen this exact summary
+            if summary in seen_summaries:
+                # Add this frame to the existing group
+                seen_summaries[summary]['all_frames'].append(annotation)
+            else:
+                # Create new group with this annotation
+                group = annotation.copy()
+                group['all_frames'] = [annotation]  # Track all frames in this batch
+                seen_summaries[summary] = group
+        else:
+            # Single annotation (batch_size=1), add directly
+            deduplicated.append(annotation)
+    
+    # Add all grouped annotations (these represent batches)
+    for group in seen_summaries.values():
+        deduplicated.append(group)
+    
+    # Sort by datetime to maintain chronological order
+    deduplicated.sort(key=lambda x: x['datetime'])
+    
+    return deduplicated
+
+
 def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> List[Dict]:
     """Load all JSON annotations from a daily directory."""
     annotations = []
@@ -51,6 +92,9 @@ def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> List[Dict]:
                 annotations.append(data)
         except Exception as e:
             logger.error(f"Error loading {json_path}: {e}")
+    
+    # Deduplicate batch annotations before returning
+    annotations = deduplicate_batch_annotations(annotations)
     
     return annotations
 
@@ -128,37 +172,49 @@ def group_activities(annotations: List[Dict], gap_minutes: int = 5) -> List[Dict
     for annotation in sorted(annotations, key=lambda x: x['datetime']):
         category, icon, color = categorize_activity(annotation.get('summary', ''))
         
+        # Check if this annotation has multiple frames (from batch deduplication)
+        all_frames = annotation.get('all_frames', [annotation])
+        
+        # Calculate the time range for all frames in the batch
+        if len(all_frames) > 1:
+            frame_times = [f['datetime'] for f in all_frames]
+            batch_start_time = min(frame_times)
+            batch_end_time = max(frame_times)
+        else:
+            batch_start_time = annotation['datetime']
+            batch_end_time = annotation['datetime']
+        
         # Start new activity or continue current one
         if current_activity is None:
             current_activity = {
-                'start_time': annotation['datetime'],
-                'end_time': annotation['datetime'],
+                'start_time': batch_start_time,
+                'end_time': batch_end_time,
                 'category': category,
                 'icon': icon,
                 'color': color,
                 'summary': annotation.get('summary', 'No summary'),
-                'frames': [annotation],
+                'frames': all_frames,  # Include all frames from the batch
                 'summaries': [annotation.get('summary', 'No summary')]
             }
         else:
-            time_diff = (annotation['datetime'] - current_activity['end_time']).total_seconds() / 60
+            time_diff = (batch_start_time - current_activity['end_time']).total_seconds() / 60
             
             # Same category and within gap threshold - extend activity
             if category == current_activity['category'] and time_diff <= gap_minutes:
-                current_activity['end_time'] = annotation['datetime']
-                current_activity['frames'].append(annotation)
+                current_activity['end_time'] = max(current_activity['end_time'], batch_end_time)
+                current_activity['frames'].extend(all_frames)  # Add all frames from batch
                 current_activity['summaries'].append(annotation.get('summary', 'No summary'))
             else:
                 # Save current activity and start new one
                 activities.append(current_activity)
                 current_activity = {
-                    'start_time': annotation['datetime'],
-                    'end_time': annotation['datetime'],
+                    'start_time': batch_start_time,
+                    'end_time': batch_end_time,
                     'category': category,
                     'icon': icon,
                     'color': color,
                     'summary': annotation.get('summary', 'No summary'),
-                    'frames': [annotation],
+                    'frames': all_frames,  # Include all frames from the batch
                     'summaries': [annotation.get('summary', 'No summary')]
                 }
     

@@ -55,12 +55,9 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"  # Parent of bin/ directory
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 CONFIG_DIR="$PROJECT_ROOT/config"
-WEBSERVER_PLIST="com.chronometry.webserver.plist"
-MENUBAR_PLIST="com.chronometry.menubar.plist"
+WEBSERVER_PLIST="user.chronometry.webserver.plist"
+MENUBAR_PLIST="user.chronometry.menubar.plist"
 LOGS_DIR="$PROJECT_ROOT/logs"
-
-# Ensure logs directory exists
-mkdir -p "$LOGS_DIR"
 
 # Function to print colored messages
 print_success() {
@@ -99,19 +96,73 @@ install_services() {
         print_info "Created $LAUNCH_AGENTS_DIR"
     fi
     
-    # Copy plist files from config directory
+    # Create logs directory if it doesn't exist
+    if [ ! -d "$LOGS_DIR" ]; then
+        mkdir -p "$LOGS_DIR"
+        print_info "Created logs directory"
+    fi
+    
+    # Check if virtual environment exists
+    if [ ! -d "$PROJECT_ROOT/venv" ]; then
+        print_warning "Virtual environment not found. Creating..."
+        cd "$PROJECT_ROOT"
+        
+        # Check if Python is available
+        if ! command -v python &> /dev/null && ! command -v python3 &> /dev/null; then
+            print_error "Python not found!"
+            print_info "Install Python: https://www.python.org/downloads/"
+            print_info "Or use Homebrew: brew install python@3.10"
+            exit 1
+        fi
+        
+        # Use python3 if available, otherwise python
+        if command -v python3 &> /dev/null; then
+            PYTHON_BIN="python3"
+        else
+            PYTHON_BIN="python"
+        fi
+        
+        $PYTHON_BIN -m venv venv
+        source venv/bin/activate
+        pip install --upgrade pip --quiet
+        pip install -r requirements.txt --quiet
+        print_success "Virtual environment created and dependencies installed"
+    fi
+    
+    # Process plist files from config directory (replace {{PROJECT_ROOT}} placeholder)
     if [ -f "$CONFIG_DIR/$WEBSERVER_PLIST" ]; then
-        cp "$CONFIG_DIR/$WEBSERVER_PLIST" "$LAUNCH_AGENTS_DIR/"
-        print_success "Installed web server service"
+        print_info "Processing web server plist template..."
+        
+        # Use sed to replace {{PROJECT_ROOT}} with actual path
+        sed "s|{{PROJECT_ROOT}}|$PROJECT_ROOT|g" "$CONFIG_DIR/$WEBSERVER_PLIST" > "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST"
+        
+        if [ $? -eq 0 ]; then
+            print_success "Installed web server service"
+            print_info "Project root: $PROJECT_ROOT"
+        else
+            print_error "Failed to process web server plist template"
+            exit 1
+        fi
     else
         print_error "Web server plist not found: $CONFIG_DIR/$WEBSERVER_PLIST"
+        exit 1
     fi
     
     if [ -f "$CONFIG_DIR/$MENUBAR_PLIST" ]; then
-        cp "$CONFIG_DIR/$MENUBAR_PLIST" "$LAUNCH_AGENTS_DIR/"
-        print_success "Installed menu bar service"
+        print_info "Processing menu bar plist template..."
+        
+        # Use sed to replace {{PROJECT_ROOT}} with actual path
+        sed "s|{{PROJECT_ROOT}}|$PROJECT_ROOT|g" "$CONFIG_DIR/$MENUBAR_PLIST" > "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST"
+        
+        if [ $? -eq 0 ]; then
+            print_success "Installed menu bar service"
+        else
+            print_error "Failed to process menu bar plist template"
+            exit 1
+        fi
     else
         print_error "Menu bar plist not found: $CONFIG_DIR/$MENUBAR_PLIST"
+        exit 1
     fi
     
     # Load services
@@ -124,6 +175,7 @@ install_services() {
     print_success "Services installed and started!"
     print_info "Services will start automatically on boot"
     print_info "Logs location: $LOGS_DIR"
+    print_info "Dashboard: http://localhost:8051"
     echo ""
 }
 
@@ -135,12 +187,38 @@ start_services() {
     echo "================================================"
     echo ""
     
-    launchctl start com.chronometry.webserver
-    print_success "Started web server"
+    # Check if plist files exist, install if not
+    if [ ! -f "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" ] && [ ! -f "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" ]; then
+        print_warning "Services not installed. Installing now..."
+        install_services
+        return
+    fi
     
-    launchctl start com.chronometry.menubar
-    print_success "Started menu bar app"
+    # Load (start) services
+    if [ -f "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" ]; then
+        if is_service_loaded "user.chronometry.webserver"; then
+            print_warning "Web server already running"
+        else
+            launchctl load "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST"
+            print_success "Started web server"
+        fi
+    else
+        print_warning "Web server service not installed"
+    fi
     
+    if [ -f "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" ]; then
+        if is_service_loaded "user.chronometry.menubar"; then
+            print_warning "Menu bar app already running"
+        else
+            launchctl load "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST"
+            print_success "Started menu bar app"
+        fi
+    else
+        print_warning "Menu bar service not installed"
+    fi
+    
+    echo ""
+    print_info "Dashboard: http://localhost:8051"
     echo ""
 }
 
@@ -152,11 +230,28 @@ stop_services() {
     echo "================================================"
     echo ""
     
-    launchctl stop com.chronometry.webserver
-    print_success "Stopped web server"
+    # Unload (stop) services to prevent auto-restart
+    if [ -f "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" ]; then
+        if is_service_loaded "user.chronometry.webserver"; then
+            launchctl unload "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST"
+            print_success "Stopped web server"
+        else
+            print_warning "Web server service not running"
+        fi
+    else
+        print_warning "Web server service not installed"
+    fi
     
-    launchctl stop com.chronometry.menubar
-    print_success "Stopped menu bar app"
+    if [ -f "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" ]; then
+        if is_service_loaded "user.chronometry.menubar"; then
+            launchctl unload "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST"
+            print_success "Stopped menu bar app"
+        else
+            print_warning "Menu bar service not running"
+        fi
+    else
+        print_warning "Menu bar service not installed"
+    fi
     
     echo ""
 }
@@ -183,9 +278,17 @@ check_status() {
     echo ""
     
     # Check web server
-    if is_service_loaded "com.chronometry.webserver"; then
+    if is_service_loaded "user.chronometry.webserver"; then
         print_success "Web Server: Running"
-        launchctl list com.chronometry.webserver | grep -E "PID|LastExitStatus"
+        launchctl list user.chronometry.webserver | grep -E "PID|LastExitStatus" || true
+        echo ""
+        
+        # Check if port is listening
+        if lsof -i :8051 -n -P 2>/dev/null | grep -q LISTEN; then
+            print_success "Port 8051: Listening"
+        else
+            print_warning "Port 8051: Not listening (may still be starting...)"
+        fi
     else
         print_error "Web Server: Not running"
     fi
@@ -193,15 +296,16 @@ check_status() {
     echo ""
     
     # Check menu bar
-    if is_service_loaded "com.chronometry.menubar"; then
+    if is_service_loaded "user.chronometry.menubar"; then
         print_success "Menu Bar App: Running"
-        launchctl list com.chronometry.menubar | grep -E "PID|LastExitStatus"
+        launchctl list user.chronometry.menubar | grep -E "PID|LastExitStatus" || true
     else
         print_error "Menu Bar App: Not running"
     fi
     
     echo ""
-    echo "Dashboard: http://localhost:8051"
+    print_info "Dashboard: http://localhost:8051"
+    print_info "Logs: $LOGS_DIR"
     echo ""
 }
 
@@ -234,14 +338,23 @@ uninstall_services() {
     echo ""
     
     # Unload services
-    launchctl unload "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" 2>/dev/null || print_warning "Web server not loaded"
-    launchctl unload "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" 2>/dev/null || print_warning "Menu bar not loaded"
+    if [ -f "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" ]; then
+        launchctl unload "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST" 2>/dev/null || print_warning "Web server not loaded"
+        rm -f "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST"
+        print_success "Web server service uninstalled"
+    else
+        print_warning "Web server service not installed"
+    fi
     
-    # Remove plist files
-    rm -f "$LAUNCH_AGENTS_DIR/$WEBSERVER_PLIST"
-    rm -f "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST"
+    if [ -f "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" ]; then
+        launchctl unload "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST" 2>/dev/null || print_warning "Menu bar not loaded"
+        rm -f "$LAUNCH_AGENTS_DIR/$MENUBAR_PLIST"
+        print_success "Menu bar service uninstalled"
+    else
+        print_warning "Menu bar service not installed"
+    fi
     
-    print_success "Services uninstalled"
+    echo ""
     print_info "Log files preserved in: $LOGS_DIR"
     echo ""
 }
@@ -283,6 +396,15 @@ case "${1:-}" in
         echo "  status    - Check service status"
         echo "  logs      - View service logs (live tail)"
         echo "  uninstall - Remove services completely"
+        echo ""
+        echo "Examples:"
+        echo "  $0 install    # Install and start the services"
+        echo "  $0 status     # Check if services are running"
+        echo "  $0 logs       # Monitor logs in real-time"
+        echo ""
+        echo "Access:"
+        echo "  Dashboard: http://localhost:8051"
+        echo "  Logs:      $LOGS_DIR"
         echo ""
         exit 1
         ;;

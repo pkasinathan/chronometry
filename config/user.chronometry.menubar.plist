@@ -4,18 +4,18 @@
 <dict>
     <!-- Service identifier -->
     <key>Label</key>
-    <string>com.chronometry.menubar</string>
+    <string>user.chronometry.menubar</string>
     
     <!-- Program to run -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/pkasinathan/workspace/chronometry/venv/bin/python</string>
-        <string>/Users/pkasinathan/workspace/chronometry/src/menubar_app.py</string>
+        <string>{{PROJECT_ROOT}}/venv/bin/python</string>
+        <string>{{PROJECT_ROOT}}/src/menubar_app.py</string>
     </array>
     
     <!-- Working directory -->
     <key>WorkingDirectory</key>
-    <string>/Users/pkasinathan/workspace/chronometry</string>
+    <string>{{PROJECT_ROOT}}</string>
     
     <!-- Run at load (boot) -->
     <key>RunAtLoad</key>
@@ -36,11 +36,11 @@
     
     <!-- Standard output log -->
     <key>StandardOutPath</key>
-    <string>/Users/pkasinathan/workspace/chronometry/logs/menubar.log</string>
+    <string>{{PROJECT_ROOT}}/logs/menubar.log</string>
     
     <!-- Standard error log -->
     <key>StandardErrorPath</key>
-    <string>/Users/pkasinathan/workspace/chronometry/logs/menubar.error.log</string>
+    <string>{{PROJECT_ROOT}}/logs/menubar.error.log</string>
     
     <!-- Note: Paths are absolute and remain unchanged -->
     <!-- Scripts now in bin/, config in config/, Python modules at root -->
@@ -60,9 +60,6 @@
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
     
-    <!-- Run as user (not root) -->
-    <key>UserName</key>
-    <string>pkasinathan</string>
 </dict>
 </plist>
 

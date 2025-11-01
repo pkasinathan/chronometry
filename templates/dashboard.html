@@ -14,6 +14,9 @@
     <!-- Vue.js for reactive UI -->
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.8/dist/vue.global.prod.js"></script>
     
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -859,6 +862,98 @@
             height: 20px;
             margin: 0;
         }
+        
+        /* Markdown Formatting Styles */
+        .markdown-content {
+            line-height: 1.6;
+        }
+        
+        .markdown-content p {
+            margin-bottom: 12px;
+        }
+        
+        .markdown-content p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .markdown-content strong {
+            font-weight: 700;
+            color: #ffffff;
+        }
+        
+        .markdown-content em {
+            font-style: italic;
+            color: #e5e5e5;
+        }
+        
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3,
+        .markdown-content h4 {
+            color: #E50914;
+            margin-top: 16px;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+        
+        .markdown-content h1 { font-size: 20px; }
+        .markdown-content h2 { font-size: 18px; }
+        .markdown-content h3 { font-size: 16px; }
+        .markdown-content h4 { font-size: 14px; }
+        
+        .markdown-content ol,
+        .markdown-content ul {
+            margin-left: 24px;
+            margin-bottom: 12px;
+        }
+        
+        .markdown-content li {
+            margin-bottom: 6px;
+            color: #e5e5e5;
+        }
+        
+        .markdown-content code {
+            background: #0a0a0a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.9em;
+            color: #E50914;
+            border: 1px solid #2a2a2a;
+        }
+        
+        .markdown-content pre {
+            background: #0a0a0a;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #2a2a2a;
+            overflow-x: auto;
+            margin-bottom: 12px;
+        }
+        
+        .markdown-content pre code {
+            background: transparent;
+            padding: 0;
+            border: none;
+        }
+        
+        .markdown-content blockquote {
+            border-left: 3px solid #E50914;
+            padding-left: 16px;
+            margin-left: 0;
+            margin-bottom: 12px;
+            color: #b3b3b3;
+            font-style: italic;
+        }
+        
+        .markdown-content a {
+            color: #E50914;
+            text-decoration: none;
+        }
+        
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -971,7 +1066,7 @@
                         <!-- Overall Summary -->
                         <div class="digest-overall">
                             <h3 class="digest-section-title">Summary</h3>
-                            <p class="digest-overall-text">[[ digest.overall_summary ]]</p>
+                            <div class="digest-overall-text markdown-content" v-html="renderMarkdown(digest.overall_summary)"></div>
                         </div>
                         
                         <!-- Category Summaries -->
@@ -989,7 +1084,7 @@
                                             [[ data.count ]] activities · [[ formatDuration(data.duration_minutes) ]]
                                         </span>
                                     </div>
-                                    <p class="digest-category-summary">[[ data.summary ]]</p>
+                                    <div class="digest-category-summary markdown-content" v-html="renderMarkdown(data.summary)"></div>
                                 </div>
                             </div>
                         </div>
@@ -1028,7 +1123,7 @@
                                     <div class="activity-icon">[[ activity.icon ]]</div>
                                     <div class="activity-content">
                                         <div class="activity-title">[[ activity.category ]]</div>
-                                        <div class="activity-summary">[[ activity.summary ]]</div>
+                                        <div class="activity-summary markdown-content" v-html="renderMarkdown(activity.summary)"></div>
                                     </div>
                                     <div class="activity-time">[[ formatTime(activity.start_time) ]] - [[ formatDuration(activity.duration_minutes) ]]</div>
                                 </div>
@@ -1039,9 +1134,6 @@
                                         <span><strong>Category:</strong> [[ activity.category ]]</span>
                                         <span><strong>Date:</strong> [[ formatDateTime(activity.start_time) ]]</span>
                                         <span><strong>Duration:</strong> [[ formatDuration(activity.duration_minutes) ]]</span>
-                                    </div>
-                                    <div class="activity-details-summary">
-                                        <strong>Summary:</strong> [[ activity.summary ]]
                                     </div>
                                     <div v-if="activityFrames.length > 0" class="activity-details-images">
                                         <div class="activity-frames-grid">
@@ -1144,7 +1236,7 @@
                                 <div class="activity-icon">[[ result.icon ]]</div>
                                 <div class="activity-content">
                                     <div class="activity-title">[[ result.category ]] - [[ result.date ]]</div>
-                                    <div class="activity-summary">[[ result.summary ]]</div>
+                                    <div class="activity-summary markdown-content" v-html="renderMarkdown(result.summary)"></div>
                                 </div>
                                 <div class="activity-time">[[ formatDuration(result.duration_minutes) ]]</div>
                             </div>
@@ -1868,6 +1960,21 @@
                 viewFrameFullSize(frame) {
                     const url = this.getFrameImageUrl(frame);
                     window.open(url, '_blank');
+                },
+                
+                renderMarkdown(text) {
+                    if (!text) return '';
+                    
+                    // Configure marked for safe rendering with GitHub Flavored Markdown
+                    try {
+                        return marked.parse(text, { 
+                            breaks: true,  // Convert line breaks to <br>
+                            gfm: true      // GitHub Flavored Markdown
+                        });
+                    } catch (error) {
+                        console.error('Error parsing markdown:', error);
+                        return text; // Fallback to raw text if parsing fails
+                    }
                 }
             },
             computed: {

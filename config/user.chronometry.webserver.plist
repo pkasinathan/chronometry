@@ -4,18 +4,18 @@
 <dict>
     <!-- Service identifier -->
     <key>Label</key>
-    <string>com.chronometry.webserver</string>
+    <string>user.chronometry.webserver</string>
     
     <!-- Program to run -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/pkasinathan/workspace/chronometry/venv/bin/python</string>
-        <string>/Users/pkasinathan/workspace/chronometry/src/web_server.py</string>
+        <string>{{PROJECT_ROOT}}/venv/bin/python</string>
+        <string>{{PROJECT_ROOT}}/src/web_server.py</string>
     </array>
     
     <!-- Working directory -->
     <key>WorkingDirectory</key>
-    <string>/Users/pkasinathan/workspace/chronometry</string>
+    <string>{{PROJECT_ROOT}}</string>
     
     <!-- Run at load (boot) -->
     <key>RunAtLoad</key>
@@ -36,11 +36,11 @@
     
     <!-- Standard output log -->
     <key>StandardOutPath</key>
-    <string>/Users/pkasinathan/workspace/chronometry/logs/webserver.log</string>
+    <string>{{PROJECT_ROOT}}/logs/webserver.log</string>
     
     <!-- Standard error log -->
     <key>StandardErrorPath</key>
-    <string>/Users/pkasinathan/workspace/chronometry/logs/webserver.error.log</string>
+    <string>{{PROJECT_ROOT}}/logs/webserver.error.log</string>
     
     <!-- Environment variables -->
     <key>EnvironmentVariables</key>
@@ -49,9 +49,6 @@
         <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
     
-    <!-- Run as user (not root) -->
-    <key>UserName</key>
-    <string>pkasinathan</string>
 </dict>
 </plist>
 
