@@ -30,14 +30,14 @@ A privacy-first, AI-powered work activity analyzer that automatically captures, 
 ## 🚀 Features
 
 ### Core Functionality
-- **📸 Automatic Screen Capture** - Configurable intervals (default: every 5 minutes)
+- **📸 Automatic Screen Capture** - Configurable intervals (default: every 15 minutes)
 - **⚡ Capture Now (Cmd+Shift+6)** - Manual ad-hoc screenshots with global hotkey
-- **🤖 AI Annotation** - Automatic activity summarization via Metatron API (batch processing)
+- **🤖 AI Annotation** - Batch processing via Metatron API (default: 4 frames together)
 - **📋 Daily Digest** - AI-powered daily summaries via Copilot API (GPT-4o)
-- **📊 Interactive Timeline** - Detailed activity timeline with batch grouping and markdown formatting
+- **📊 Interactive Timeline** - Smart batch grouping with markdown-formatted summaries
 - **📈 Analytics Dashboard** - Charts, insights, and productivity metrics
-- **🔍 Search** - Search through all your activities
-- **⚙️ Settings** - Configure everything via web UI
+- **🔍 Search** - Full-text search through all activities
+- **⚙️ Settings** - Configure everything via web UI (live updates)
 
 ### Privacy & Security
 - **🔒 100% Local Storage** - All data stored on your machine
@@ -80,7 +80,7 @@ Full control via terminal scripts
 Use the service manager - it handles everything automatically:
 
 ```bash
-git clone <repo-url>
+git clone https://github.netflix.net/pkasinathan/chronometry.git
 cd chronometry
 ./bin/manage_services.sh install
 ```
@@ -92,43 +92,24 @@ cd chronometry
 - ✅ Installs services to run at boot
 - ✅ Starts services immediately
 
-### Manual Install
-
-If you prefer manual setup:
+### Pre-requisites
 
 ```bash
-# 1. Clone repository
-git clone <repo-url>
-cd chronometry
-
-# 2. Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Verify Metatron CLI
-which metatron  # Should return /usr/local/bin/metatron
+# Verify Metatron CLI
+metatron smoketest  # Should return "Hello, User: <yourusername>@netflix.com!"
 ```
-   
+
+```text
+A Netflix Gateway Project (NGP) is required for timeline digest generation. If you don’t already have one, you can quickly create a new project here: http://go/modelgateway
+
+Your NGP will be private to you and used exclusively by this tool.
+```
+
 ---
 
 ## 🚀 Quick Start
 
-### Recommended: Menu Bar App (macOS)
-
-**Start the menu bar app**:
-```bash
-./bin/start_chronometry_menubar.sh
-```
-
-**Start the web dashboard** (separate terminal):
-```bash
-./bin/start_chronometry_webserver.sh
-```
-
-**Or use the service manager:**
+**Use the service manager:**
 ```bash
 ./bin/manage_services.sh start
 ```
@@ -138,42 +119,52 @@ which metatron  # Should return /usr/local/bin/metatron
 2. Open browser → http://localhost:8051
 3. View real-time digest and analytics
 
-**Automatic Processing**:
-- 📸 Capture: Every 5 minutes (default)
-- 🤖 Annotation: Every 2 minutes
+**Automatic Processing** (defaults - all configurable):
+- 📸 Capture: Every 15 minutes (configurable via `capture.fps`)
+- 🤖 Annotation: Every 2 minutes (processes in batches of 4 frames)
 - 📊 Timeline: Every 5 minutes
-- 📋 **Digest: Every 60 minutes** ← AI-powered summary!
+- 📋 **Digest: Every 60 minutes** (configurable via `digest.interval_seconds`)
 
 ---
 
 ## ⚙️ Configuration
 
-Edit `config/config.yaml`:
+**Default Settings** (edit `config/config.yaml` or use Web UI):
 
 ```yaml
 # Screen capture settings
 capture:
-  fps: 0.00333333              # 1 frame / 300 sec = every 5 min
-  monitor_index: 1             # Which monitor to capture
+  fps: 0.00111111              # 1 frame / 900 sec = every 15 min (default)
+  monitor_index: 1             # Which monitor to capture (0 = all monitors)
   retention_days: 1095         # Auto-delete after 3 years
+  region: null                 # Capture region [x, y, w, h] or null for full screen
 
 # AI annotation settings
 annotation:
-  batch_size: 3                # Frames per API call (batch processing)
+  batch_size: 4                # Frames per API call (default: 4 for better context)
   timeout_sec: 30              # API timeout
+  api_url: "https://aiopsproxy..."  # Metatron API endpoint
+  prompt: "Summarize the type of task..."  # AI instruction
 
 # Timeline settings
 timeline:
-  bucket_minutes: 30           # Time grouping for activities
+  bucket_minutes: 30           # Time grouping for continuous activities
+  min_tokens_per_bucket: 20    # Filter out minimal activity periods
+  output_dir: "./output"       # Where HTML timelines are saved
 
 # Digest settings
 digest:
-  enabled: true                # Enable digest generation
-  interval_seconds: 3600       # Generate every 60 minutes
-  ncp_project_id: "prabhuai"   # Netflix Copilot project ID (NEW!)
+  enabled: true                # Enable automatic digest generation
+  interval_seconds: 3600       # Generate every 60 minutes (default: 1 hour)
+  ncp_project_id: "prabhuai"   # Your Netflix Gateway Project ID
 ```
 
-**Or configure via Web UI**: http://localhost:8051 → Settings
+**💡 Tip**: All settings are configurable! Edit the YAML file directly or use the **Settings tab** in the web UI at http://localhost:8051 for a user-friendly interface.
+
+**Common Adjustments**:
+- **More frequent captures**: Set `fps: 0.00333333` (every 5 min)
+- **Larger batches**: Set `batch_size: 6` (more context for AI)
+- **Shorter retention**: Set `retention_days: 30` (save disk space)
 
 ---
 
@@ -208,16 +199,19 @@ digest:
 ### Process Flow
 
 ```
-1. CAPTURE (continuous)
+1. CAPTURE (continuous - default: every 15 min)
    └─→ Screenshots saved to data/frames/YYYY-MM-DD/*.png
 
-2. ANNOTATION (every 2 min)
+2. ANNOTATION (every 2 min - batch_size: 4)
    └─→ AI summaries via Metatron API → *.json files
+   └─→ Same summary saved to all frames in batch
 
 3. TIMELINE (every 5 min)
+   └─→ Deduplicates batch annotations into single entries
+   └─→ Renders markdown formatting in summaries
    └─→ HTML timeline generated → output/timeline_*.html
 
-4. DIGEST (every 60 min)  ← NEW!
+4. DIGEST (default: every 60 min - configurable)
    └─→ AI daily summary via Copilot API → data/digests/*.json
 ```
 
@@ -584,35 +578,36 @@ Menu bar → Stop Capture
 
 ## 🎯 Configuration Examples
 
-### High-Frequency Capture (Every 3 minutes)
+### High-Frequency Capture (Every 5 minutes)
 ```yaml
 capture:
-  fps: 0.00555556  # 1/180 = every 180 seconds
+  fps: 0.00333333  # 1/300 = every 300 seconds (5 min)
 annotation:
-  batch_size: 3    # Process 3 frames together
+  batch_size: 6    # Process 6 frames together (30 min context)
 digest:
   interval_seconds: 1800  # Digest every 30 min
 ```
 
-### Low-Frequency Capture (Every 10 minutes)
+### Low-Frequency Capture (Every 30 minutes)
 ```yaml
 capture:
-  fps: 0.00166667  # 1/600 = every 600 seconds
+  fps: 0.00055556  # 1/1800 = every 1800 seconds (30 min)
 annotation:
-  batch_size: 1    # Process 1 frame at a time
+  batch_size: 2    # Process 2 frames together (60 min context)
 digest:
   interval_seconds: 7200  # Digest every 2 hours
 ```
 
-### Batch Annotation for Efficiency
-```yaml
-annotation:
-  batch_size: 3    # Send 3 screenshots to API together
-# Benefits:
-# - More context for AI summarization
-# - Timeline groups batch into single entry with all screenshots
-# - Reduces API calls (more efficient)
-```
+### Batch Annotation Benefits
+When using `batch_size > 1`, the AI receives multiple screenshots together:
+
+**Advantages**:
+- ✅ **Better Context**: AI sees progression of work across multiple frames
+- ✅ **Richer Summaries**: More detailed understanding of tasks
+- ✅ **Efficient Timeline**: Batches grouped into single entry with all screenshots
+- ✅ **Fewer API Calls**: Reduces token usage and costs
+
+**Default**: `batch_size: 4` (optimal balance of context and performance)
 
 ### Work Hours Only (Manual Start/Stop)
 ```yaml
