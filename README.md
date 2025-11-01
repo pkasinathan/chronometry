@@ -32,9 +32,9 @@ A privacy-first, AI-powered work activity analyzer that automatically captures, 
 ### Core Functionality
 - **📸 Automatic Screen Capture** - Configurable intervals (default: every 5 minutes)
 - **⚡ Capture Now (Cmd+Shift+6)** - Manual ad-hoc screenshots with global hotkey
-- **🤖 AI Annotation** - Automatic activity summarization via Metatron API
+- **🤖 AI Annotation** - Automatic activity summarization via Metatron API (batch processing)
 - **📋 Daily Digest** - AI-powered daily summaries via Copilot API (GPT-4o)
-- **📊 Interactive Timeline** - Detailed activity timeline with date navigation
+- **📊 Interactive Timeline** - Detailed activity timeline with batch grouping and markdown formatting
 - **📈 Analytics Dashboard** - Charts, insights, and productivity metrics
 - **🔍 Search** - Search through all your activities
 - **⚙️ Settings** - Configure everything via web UI
@@ -75,27 +75,42 @@ Full control via terminal scripts
 
 ## 📦 Installation
 
-### 1. Clone Repository
+### Quick Install (Recommended)
+
+Use the service manager - it handles everything automatically:
+
 ```bash
 git clone <repo-url>
-cd Chronometry
+cd chronometry
+./bin/manage_services.sh install
 ```
 
-### 2. Create Virtual Environment
-   ```bash
-   python3 -m venv venv
+**What it does**:
+- ✅ Auto-creates virtual environment if missing
+- ✅ Installs all dependencies from requirements.txt
+- ✅ Processes plist templates with your project path
+- ✅ Installs services to run at boot
+- ✅ Starts services immediately
+
+### Manual Install
+
+If you prefer manual setup:
+
+```bash
+# 1. Clone repository
+git clone <repo-url>
+cd chronometry
+
+# 2. Create virtual environment
+python3 -m venv venv
 source venv/bin/activate
-   ```
 
-### 3. Install Dependencies
-   ```bash
-   pip install -r requirements.txt
-   ```
+# 3. Install dependencies
+pip install -r requirements.txt
 
-### 4. Verify Metatron CLI
-   ```bash
-   which metatron  # Should return /usr/local/bin/metatron
-   ```
+# 4. Verify Metatron CLI
+which metatron  # Should return /usr/local/bin/metatron
+```
    
 ---
 
@@ -144,12 +159,12 @@ capture:
 
 # AI annotation settings
 annotation:
-  batch_size: 1                # Frames per API call
+  batch_size: 3                # Frames per API call (batch processing)
   timeout_sec: 30              # API timeout
 
 # Timeline settings
 timeline:
-  bucket_minutes: 30           # Time grouping
+  bucket_minutes: 30           # Time grouping for activities
 
 # Digest settings
 digest:
@@ -226,9 +241,10 @@ Screenshot → AI Summary → Activity Timeline → Daily Digest
 
 ### Timeline Tab
 - **Detailed Activities**: All activities with categories and durations
-- **Inline Expansion**: Click to expand details in-place (NEW!)
+- **Batch Deduplication**: Groups batch annotations into single entries with all frames
+- **Markdown Rendering**: Beautiful formatting for summaries (bold, lists, code blocks)
+- **Inline Expansion**: Click to expand details in-place with screenshot grid
 - **Date Picker**: Navigate to any captured date
-- **Screenshots Grid**: View all frames for an activity
 - **Full Timestamps**: Date with time component displayed
 
 ### Analytics Tab
@@ -263,8 +279,8 @@ Chronometry/
 │
 ├── config/                         # Configuration files
 │   ├── config.yaml                 # Main configuration
-│   ├── com.chronometry.menubar.plist
-│   ├── com.chronometry.webserver.plist
+│   ├── user.chronometry.menubar.plist
+│   ├── user.chronometry.webserver.plist
 │   └── README.md                   # Config documentation
 │
 ├── src/                            # Python modules
@@ -572,6 +588,8 @@ Menu bar → Stop Capture
 ```yaml
 capture:
   fps: 0.00555556  # 1/180 = every 180 seconds
+annotation:
+  batch_size: 3    # Process 3 frames together
 digest:
   interval_seconds: 1800  # Digest every 30 min
 ```
@@ -580,8 +598,20 @@ digest:
 ```yaml
 capture:
   fps: 0.00166667  # 1/600 = every 600 seconds
+annotation:
+  batch_size: 1    # Process 1 frame at a time
 digest:
   interval_seconds: 7200  # Digest every 2 hours
+```
+
+### Batch Annotation for Efficiency
+```yaml
+annotation:
+  batch_size: 3    # Send 3 screenshots to API together
+# Benefits:
+# - More context for AI summarization
+# - Timeline groups batch into single entry with all screenshots
+# - Reduces API calls (more efficient)
 ```
 
 ### Work Hours Only (Manual Start/Stop)
