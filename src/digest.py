@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 from collections import defaultdict
 
-from common import load_config, get_daily_dir
+from common import load_config, get_daily_dir, save_json, load_json, format_date
 from timeline import load_annotations, group_activities, calculate_stats
 from token_usage import TokenUsageTracker
 
@@ -230,9 +230,9 @@ def generate_daily_digest(date: datetime, config: dict) -> Dict:
     daily_dir = get_daily_dir(root_dir, date)
     
     if not daily_dir.exists():
-        logger.info(f"No data found for {date.strftime('%Y-%m-%d')}")
+        logger.info(f"No data found for {format_date(date)}")
         return {
-            'date': date.strftime('%Y-%m-%d'),
+            'date': format_date(date),
             'error': 'No data available',
             'overall_summary': 'No activities recorded for this day.',
             'category_summaries': {},
@@ -240,12 +240,12 @@ def generate_daily_digest(date: datetime, config: dict) -> Dict:
         }
     
     # Load annotations and generate activities
-    logger.info(f"Loading annotations for {date.strftime('%Y-%m-%d')}...")
+    logger.info(f"Loading annotations for {format_date(date)}...")
     annotations = load_annotations(daily_dir)
     
     if not annotations:
         return {
-            'date': date.strftime('%Y-%m-%d'),
+            'date': format_date(date),
             'error': 'No annotations',
             'overall_summary': 'No activities recorded for this day.',
             'category_summaries': {},
@@ -272,7 +272,7 @@ def generate_daily_digest(date: datetime, config: dict) -> Dict:
     
     # Create digest (no token_usage field - that's tracked separately now)
     digest = {
-        'date': date.strftime('%Y-%m-%d'),
+        'date': format_date(date),
         'overall_summary': overall_summary,
         'category_summaries': category_summaries,
         'stats': stats,
@@ -283,10 +283,9 @@ def generate_daily_digest(date: datetime, config: dict) -> Dict:
     cache_dir = Path(root_dir) / 'digests'
     cache_dir.mkdir(exist_ok=True)
     
-    cache_file = cache_dir / f"digest_{date.strftime('%Y-%m-%d')}.json"
-    with open(cache_file, 'w') as f:
-        json.dump(digest, f, indent=2)
-    
+    cache_file = cache_dir / f"digest_{format_date(date)}.json"
+    # Use helper to save JSON
+    save_json(cache_file, digest)
     logger.info(f"Digest cached to {cache_file}")
     
     return digest
@@ -296,12 +295,12 @@ def load_cached_digest(date: datetime, config: dict) -> Dict:
     """Load a cached digest if available."""
     root_dir = config['root_dir']
     cache_dir = Path(root_dir) / 'digests'
-    cache_file = cache_dir / f"digest_{date.strftime('%Y-%m-%d')}.json"
+    cache_file = cache_dir / f"digest_{format_date(date)}.json"
     
     if cache_file.exists():
         try:
-            with open(cache_file, 'r') as f:
-                return json.load(f)
+            # Use helper to load JSON
+            return load_json(cache_file)
         except Exception as e:
             logger.warning(f"Error loading cached digest: {e}")
     
@@ -313,7 +312,7 @@ def get_or_generate_digest(date: datetime, config: dict, force_regenerate: bool 
     if not force_regenerate:
         cached = load_cached_digest(date, config)
         if cached:
-            logger.info(f"Using cached digest for {date.strftime('%Y-%m-%d')}")
+            logger.info(f"Using cached digest for {format_date(date)}")
             return cached
     
     return generate_daily_digest(date, config)

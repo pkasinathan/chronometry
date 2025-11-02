@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict
 from urllib.parse import urlparse
 from common import (
-    load_config, get_daily_dir, get_json_path
+    load_config, get_daily_dir, get_json_path, save_json, count_unannotated_frames,
+    format_date
 )
 
 # Configure logging
@@ -191,10 +192,8 @@ def process_batch(image_paths: List[Path], config: dict):
                 "batch_size": len(image_paths)
             }
             
-            # Save JSON
-            with open(json_path, 'w') as f:
-                json.dump(json_data, f, indent=2)
-            
+            # Save JSON using helper
+            save_json(json_path, json_data)
             logger.info(f"Saved annotation: {json_path.name}")
             
     except Exception as e:
@@ -235,18 +234,19 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
         dirs_to_check.append((date, daily_dir))
     
     if not dirs_to_check:
-        logger.info(f"No frames found for {date.strftime('%Y-%m-%d')} or previous day")
+        logger.info(f"No frames found for {format_date(date)} or previous day")
         return 0
     
     # Find all PNG files without corresponding JSON across checked directories
     for check_date, check_dir in dirs_to_check:
+        # Get list of unannotated frames (not just count)
         png_files = sorted(check_dir.glob("*.png"))
         dir_unannotated = [
             png_path for png_path in png_files 
             if not get_json_path(png_path, json_suffix).exists()
         ]
         if dir_unannotated:
-            logger.info(f"Found {len(dir_unannotated)} unannotated frames in {check_date.strftime('%Y-%m-%d')}")
+            logger.info(f"Found {len(dir_unannotated)} unannotated frames in {format_date(check_date)}")
             unannotated.extend(dir_unannotated)
     
     if not unannotated:

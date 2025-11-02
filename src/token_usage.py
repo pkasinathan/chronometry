@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
+from common import format_date, save_json, load_json
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +50,7 @@ class TokenUsageTracker:
             return  # Don't log zero-token calls (errors)
         
         now = datetime.now()
-        date_str = now.strftime('%Y-%m-%d')
+        date_str = format_date(now)
         log_file = self.token_dir / f"{date_str}.json"
         
         # Use file locking to prevent race conditions
@@ -119,7 +121,7 @@ class TokenUsageTracker:
         Returns:
             Dict with usage data or empty dict if no data
         """
-        date_str = date.strftime('%Y-%m-%d')
+        date_str = format_date(date)
         log_file = self.token_dir / f"{date_str}.json"
         
         if not log_file.exists():

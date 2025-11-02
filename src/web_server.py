@@ -16,7 +16,10 @@ from flask_socketio import SocketIO, emit
 import pandas as pd
 from PIL import Image
 
-from common import load_config, get_daily_dir, get_frame_path
+from common import (
+    load_config, get_daily_dir, get_frame_path, ensure_absolute_path,
+    load_json, format_date, parse_date, parse_timestamp
+)
 from timeline import load_annotations, categorize_activity, group_activities, calculate_stats
 from digest import get_or_generate_digest
 from token_usage import TokenUsageTracker
@@ -47,10 +50,9 @@ def init_config():
     try:
         config = load_config()
         
-        # Convert relative paths to absolute (since we're in src/)
-        if 'root_dir' in config and not Path(config['root_dir']).is_absolute():
-            project_root = Path(__file__).parent.parent
-            config['root_dir'] = str(project_root / config['root_dir'])
+        # Convert relative paths to absolute using helper
+        if 'root_dir' in config:
+            config['root_dir'] = ensure_absolute_path(config['root_dir'])
         
         # Set Flask secret key from config
         server_config = config.get('server', {})
@@ -290,13 +292,13 @@ def get_timeline():
     """Get timeline data for a specific date or date range."""
     try:
         # Get query parameters
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        date_str = request.args.get('date', format_date(datetime.now()))
         days = int(request.args.get('days', 1))  # Number of days to include
         
         root_dir = config['root_dir']
         
-        # Parse start date
-        start_date = datetime.strptime(date_str, '%Y-%m-%d')
+        # Parse start date using helper
+        start_date = parse_date(date_str)
         
         all_activities = []
         
@@ -314,7 +316,7 @@ def get_timeline():
                 
                 # Add date info to each activity
                 for activity in activities:
-                    activity['date'] = current_date.strftime('%Y-%m-%d')
+                    activity['date'] = format_date(current_date)
                     activity['start_time_str'] = activity['start_time'].isoformat()
                     activity['end_time_str'] = activity['end_time'].isoformat()
                     
@@ -341,7 +343,7 @@ def get_timeline():
 def get_timeline_by_date(date):
     """Get timeline data for a specific date with full details."""
     try:
-        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        date_obj = parse_date(date)
         root_dir = config['root_dir']
         daily_dir = get_daily_dir(root_dir, date_obj)
         
@@ -433,7 +435,7 @@ def search_activities():
                 
                 # Add to results
                 results.append({
-                    'date': date.strftime('%Y-%m-%d'),
+                    'date': format_date(date),
                     'category': activity['category'],
                     'icon': activity['icon'],
                     'color': activity['color'],
@@ -483,7 +485,7 @@ def get_analytics():
             stats = calculate_stats(activities)
             
             daily_stats.append({
-                'date': date.strftime('%Y-%m-%d'),
+                'date': format_date(date),
                 'focus_percentage': stats['focus_percentage'],
                 'distraction_percentage': stats['distraction_percentage'],
                 'total_activities': len(activities),
@@ -505,7 +507,7 @@ def get_analytics():
                 usage = tracker.get_daily_usage(date)
                 if usage['total_tokens'] > 0:
                     token_usage_data.append({
-                        'date': date.strftime('%Y-%m-%d'),
+                        'date': format_date(date),
                         'digest_tokens': usage['by_type'].get('digest', 0),
                         'annotation_tokens': usage['by_type'].get('annotation', 0),
                         'total_tokens': usage['total_tokens']
@@ -542,8 +544,8 @@ def get_analytics():
 def export_csv():
     """Export timeline data as CSV."""
     try:
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        date_str = request.args.get('date', format_date(datetime.now()))
+        date_obj = parse_date(date_str)
         
         root_dir = config['root_dir']
         daily_dir = get_daily_dir(root_dir, date_obj)
@@ -590,8 +592,8 @@ def export_csv():
 def export_json():
     """Export timeline data as JSON."""
     try:
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        date_str = request.args.get('date', format_date(datetime.now()))
+        date_obj = parse_date(date_str)
         
         root_dir = config['root_dir']
         daily_dir = get_daily_dir(root_dir, date_obj)
@@ -632,8 +634,8 @@ def export_json():
 def get_frames():
     """Get list of frames for a specific date."""
     try:
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        date_str = request.args.get('date', format_date(datetime.now()))
+        date_obj = parse_date(date_str)
         
         root_dir = config['root_dir']
         daily_dir = get_daily_dir(root_dir, date_obj)
@@ -645,13 +647,13 @@ def get_frames():
         json_files = sorted(daily_dir.glob('*.json'))
         
         for json_file in json_files:
-            with open(json_file, 'r') as f:
-                data = json.load(f)
+            # Use helper to load JSON
+            data = load_json(json_file)
             
             timestamp = json_file.stem
             frames.append({
                 'timestamp': timestamp,
-                'datetime': datetime.strptime(timestamp, '%Y%m%d_%H%M%S').isoformat(),
+                'datetime': parse_timestamp(timestamp).isoformat(),
                 'summary': data.get('summary', ''),
                 'image_file': data.get('image_file', '')
             })
@@ -666,14 +668,11 @@ def get_frames():
 def get_frame_image(date, timestamp):
     """Get a specific frame image."""
     try:
-        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        date_obj = parse_date(date)
         root_dir = config['root_dir']
         
-        # Convert to absolute path if relative
-        if not Path(root_dir).is_absolute():
-            # Since we're in src/, navigate to project root first
-            project_root = Path(__file__).parent.parent
-            root_dir = str(project_root / root_dir)
+        # Ensure absolute path using helper
+        root_dir = ensure_absolute_path(root_dir)
         
         daily_dir = get_daily_dir(root_dir, date_obj)
         image_path = daily_dir / f"{timestamp}.png"
@@ -703,8 +702,8 @@ def get_available_dates():
                 continue
             
             try:
-                # Validate date format
-                datetime.strptime(date_dir.name, '%Y-%m-%d')
+                # Validate date format using helper
+                parse_date(date_dir.name)
                 
                 # Count frames
                 json_files = list(date_dir.glob('*.json'))
@@ -728,11 +727,11 @@ def get_digest(date=None):
     """Get daily digest summary."""
     try:
         if date is None:
-            date_str = datetime.now().strftime('%Y-%m-%d')
+            date_str = format_date(datetime.now())
             date_obj = datetime.now()
         else:
             date_str = date
-            date_obj = datetime.strptime(date, '%Y-%m-%d')
+            date_obj = parse_date(date)
         
         # Check if force regenerate is requested
         force_regenerate = request.args.get('force', 'false').lower() == 'true'

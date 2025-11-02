@@ -9,7 +9,7 @@ import base64
 from collections import defaultdict
 
 from common import (
-    load_config, get_daily_dir, ensure_dir
+    load_config, get_daily_dir, ensure_dir, load_json, format_date, parse_timestamp
 )
 
 # Configure logging
@@ -69,27 +69,27 @@ def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> List[Dict]:
     
     for json_path in json_files:
         try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-                # Parse timestamp from filename
-                timestamp_str = json_path.stem
-                data['datetime'] = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-                data['timestamp_str'] = timestamp_str
-                
-                # Try to load corresponding image as base64
-                img_path = json_path.parent / data.get('image_file', f"{timestamp_str}.png")
-                if img_path.exists():
-                    try:
-                        with open(img_path, 'rb') as img_f:
-                            img_data = base64.b64encode(img_f.read()).decode('utf-8')
-                            data['image_base64'] = f"data:image/png;base64,{img_data}"
-                    except Exception as img_error:
-                        logger.warning(f"Failed to load image {img_path}: {img_error}")
-                        data['image_base64'] = None
-                else:
+            # Use helper to load JSON
+            data = load_json(json_path)
+            # Parse timestamp from filename using helper
+            timestamp_str = json_path.stem
+            data['datetime'] = parse_timestamp(timestamp_str)
+            data['timestamp_str'] = timestamp_str
+            
+            # Try to load corresponding image as base64
+            img_path = json_path.parent / data.get('image_file', f"{timestamp_str}.png")
+            if img_path.exists():
+                try:
+                    with open(img_path, 'rb') as img_f:
+                        img_data = base64.b64encode(img_f.read()).decode('utf-8')
+                        data['image_base64'] = f"data:image/png;base64,{img_data}"
+                except Exception as img_error:
+                    logger.warning(f"Failed to load image {img_path}: {img_error}")
                     data['image_base64'] = None
-                    
-                annotations.append(data)
+            else:
+                data['image_base64'] = None
+                
+            annotations.append(data)
         except Exception as e:
             logger.error(f"Error loading {json_path}: {e}")
     
@@ -1026,11 +1026,11 @@ def generate_timeline(config: dict, date: datetime = None):
     daily_dir = get_daily_dir(root_dir, date)
     
     if not daily_dir.exists():
-        logger.info(f"No data found for {date.strftime('%Y-%m-%d')}")
+        logger.info(f"No data found for {format_date(date)}")
         return
     
     # Load annotations
-    logger.info(f"Loading annotations for {date.strftime('%Y-%m-%d')}...")
+    logger.info(f"Loading annotations for {format_date(date)}...")
     annotations = load_annotations(daily_dir)
     
     if not annotations:
@@ -1054,7 +1054,7 @@ def generate_timeline(config: dict, date: datetime = None):
     output_path = Path(output_dir)
     ensure_dir(output_path)
     
-    output_file = output_path / f"timeline_{date.strftime('%Y-%m-%d')}.html"
+    output_file = output_path / f"timeline_{format_date(date)}.html"
     
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html)

@@ -15,7 +15,11 @@ from capture import capture_screen, capture_single_frame, capture_region_interac
 from annotate import annotate_frames
 from timeline import generate_timeline
 from digest import generate_daily_digest
-from common import load_config, show_notification, NotificationMessages
+from common import (
+    load_config, show_notification, NotificationMessages,
+    get_notification_config, get_capture_config, calculate_compensated_sleep,
+    count_unannotated_frames
+)
 
 # Configure logging
 logging.basicConfig(
@@ -207,12 +211,15 @@ class ChronometryApp(rumps.App):
         from PIL import Image
         from common import get_frame_path, ensure_dir, cleanup_old_data, get_monitor_config
         
-        # Notification preferences (per-capture pre-notification)
-        notifications = self.config.get('notifications', {})
-        notifications_enabled = notifications.get('enabled', True)
-        pre_notify_enabled = notifications.get('notify_before_capture', False)
-        pre_notify_seconds = int(notifications.get('pre_capture_warning_seconds', 5) or 0)
-        pre_notify_sound = bool(notifications.get('pre_capture_sound', False))
+        # Get configuration using helpers
+        notif_config = get_notification_config(self.config)
+        cap_config = get_capture_config(self.config)
+        
+        # Extract notification settings
+        notifications_enabled = notif_config['enabled']
+        pre_notify_enabled = notif_config['pre_notify_enabled']
+        pre_notify_seconds = notif_config['pre_notify_seconds']
+        pre_notify_sound = notif_config['pre_notify_sound']
         
         logger.info(f"Notifications enabled: {notifications_enabled}")
         logger.info(f"Pre-capture notification enabled: {pre_notify_enabled}")
@@ -220,22 +227,18 @@ class ChronometryApp(rumps.App):
         logger.info(f"Pre-capture sound: {pre_notify_sound}")
         
         # Wait 5 seconds after notification (startup delay from system config)
-        # Note: In system_config.yaml this is under capture.startup_delay_seconds
-        # But it might also be in the top-level system config
         startup_delay = 5  # Default
         if 'capture' in self.config and 'startup_delay_seconds' in self.config['capture']:
             startup_delay = self.config['capture']['startup_delay_seconds']
         
         time.sleep(startup_delay)
         
-        capture_config = self.config['capture']
-        root_dir = self.config['root_dir']
-        
-        capture_interval_seconds = capture_config.get('capture_interval_seconds', 900)
-        monitor_index = capture_config['monitor_index']
-        # Get region from system config if exists
-        region = self.config.get('capture', {}).get('region')
-        retention_days = capture_config.get('retention_days', 1095)
+        # Extract capture settings
+        root_dir = cap_config['root_dir']
+        capture_interval_seconds = cap_config['interval']
+        monitor_index = cap_config['monitor_index']
+        region = cap_config['region']
+        retention_days = cap_config['retention_days']
         
         sleep_interval = capture_interval_seconds
         
@@ -328,10 +331,11 @@ class ChronometryApp(rumps.App):
                     logger.info("Continuing capture loop...")
                 
                 # Sleep until next capture, compensating for pre-notification delay to keep cadence
-                post_sleep = sleep_interval
-                if result.get('showed_pre_notification', False):
-                    # Account for both pre_notify_seconds and the 2 second notification disappear delay
-                    post_sleep = max(sleep_interval - pre_notify_seconds - 2, 0)
+                post_sleep = calculate_compensated_sleep(
+                    sleep_interval,
+                    pre_notify_seconds,
+                    result.get('showed_pre_notification', False)
+                )
                 time.sleep(post_sleep)
     
     def _annotation_loop(self):
@@ -371,16 +375,13 @@ class ChronometryApp(rumps.App):
             # Check if enough unannotated frames exist
             try:
                 from pathlib import Path
+                from common import format_date
                 root_dir = self.config['root_dir']
-                today = datetime.now().strftime('%Y-%m-%d')
+                today = format_date(datetime.now())
                 frames_dir = Path(root_dir) / 'frames' / today
                 
-                unannotated_count = 0
-                if frames_dir.exists():
-                    for png_file in frames_dir.glob('*.png'):
-                        json_file = png_file.with_suffix('.json')
-                        if not json_file.exists():
-                            unannotated_count += 1
+                # Use helper to count unannotated frames
+                unannotated_count = count_unannotated_frames(frames_dir)
                 
                 # Run annotation if EITHER condition is met:
                 # 1. Enough frames accumulated (>= batch_size)
@@ -553,7 +554,7 @@ class ChronometryApp(rumps.App):
     def open_timeline(self, _):
         """Open today's timeline in browser."""
         output_dir = Path(self.config['timeline'].get('output_dir', './output'))
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = format_date(datetime.now())
         timeline_file = output_dir / f"timeline_{today}.html"
         
         if timeline_file.exists():

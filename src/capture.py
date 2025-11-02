@@ -8,7 +8,8 @@ import mss
 from PIL import Image
 from common import (
     load_config, ensure_dir, cleanup_old_data, get_frame_path, get_monitor_config,
-    show_notification, NotificationMessages
+    show_notification, NotificationMessages, get_notification_config, get_capture_config,
+    calculate_compensated_sleep, save_json
 )
 
 # Configure logging
@@ -83,9 +84,8 @@ def create_synthetic_annotation(root_dir: str, timestamp: datetime, reason: str,
             "reason": reason
         }
         
-        with open(json_path, 'w') as f:
-            json.dump(annotation, f, indent=2)
-        
+        # Use helper to save JSON
+        save_json(json_path, annotation)
         logger.info(f"Synthetic annotation created: {summary}")
     except Exception as e:
         logger.warning(f"Failed to create synthetic annotation: {e}")
@@ -455,24 +455,25 @@ def capture_iteration(
 
 def capture_screen(config: dict):
     """Capture screen based on configuration with error recovery."""
-    capture_config = config['capture']
-    root_dir = config['root_dir']
+    # Get configuration using helpers
+    cap_config = get_capture_config(config)
+    notif_config = get_notification_config(config)
     
-    # Get capture settings
-    capture_interval_seconds = capture_config.get('capture_interval_seconds', 900)
-    monitor_index = capture_config['monitor_index']
-    region = capture_config.get('region')
-    retention_days = capture_config.get('retention_days', 1095)
+    # Extract settings
+    root_dir = cap_config['root_dir']
+    capture_interval_seconds = cap_config['interval']
+    monitor_index = cap_config['monitor_index']
+    region = cap_config['region']
+    retention_days = cap_config['retention_days']
     
     # Use capture interval directly
     sleep_interval = capture_interval_seconds
 
-    # Notification preferences (per-capture pre-notification)
-    notifications = config.get('notifications', {})
-    notif_enabled = notifications.get('enabled', True)
-    pre_notify_enabled = notifications.get('notify_before_capture', False)
-    pre_notify_seconds = int(notifications.get('pre_capture_warning_seconds', 5) or 0)
-    pre_notify_sound = bool(notifications.get('pre_capture_sound', False))
+    # Notification preferences
+    notif_enabled = notif_config['enabled']
+    pre_notify_enabled = notif_config['pre_notify_enabled']
+    pre_notify_seconds = notif_config['pre_notify_seconds']
+    pre_notify_sound = notif_config['pre_notify_sound']
     
     logger.info("Starting screen capture...")
     logger.info(f"Capture interval: {capture_interval_seconds} seconds ({capture_interval_seconds/60:.1f} minutes)")
@@ -562,10 +563,11 @@ def capture_screen(config: dict):
                     raise
                 
                 # Sleep until next capture, compensating for pre-notification delay to keep cadence
-                post_sleep = sleep_interval
-                if result.get('showed_pre_notification', False):
-                    # Account for both pre_notify_seconds and the 2 second notification disappear delay
-                    post_sleep = max(sleep_interval - pre_notify_seconds - 2, 0)
+                post_sleep = calculate_compensated_sleep(
+                    sleep_interval,
+                    pre_notify_seconds,
+                    result.get('showed_pre_notification', False)
+                )
                 time.sleep(post_sleep)
                 
         except KeyboardInterrupt:

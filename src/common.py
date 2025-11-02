@@ -407,6 +407,210 @@ def get_monitor_config(monitors: list, monitor_index: int, region: Optional[list
         return monitors[monitor_index]
 
 
+# ============================================================================
+# Configuration Helpers - Reduce duplication across modules
+# ============================================================================
+
+def get_notification_config(config: dict) -> dict:
+    """Extract notification configuration with defaults.
+    
+    Args:
+        config: Configuration dictionary
+        
+    Returns:
+        Dictionary with notification settings
+    """
+    notifications = config.get('notifications', {})
+    return {
+        'enabled': notifications.get('enabled', True),
+        'pre_notify_enabled': notifications.get('notify_before_capture', False),
+        'pre_notify_seconds': int(notifications.get('pre_capture_warning_seconds', 5) or 0),
+        'pre_notify_sound': bool(notifications.get('pre_capture_sound', False))
+    }
+
+
+def get_capture_config(config: dict) -> dict:
+    """Extract capture configuration with defaults.
+    
+    Args:
+        config: Configuration dictionary
+        
+    Returns:
+        Dictionary with capture settings
+    """
+    capture_config = config['capture']
+    return {
+        'root_dir': config['root_dir'],
+        'interval': capture_config.get('capture_interval_seconds', 900),
+        'monitor_index': capture_config['monitor_index'],
+        'region': capture_config.get('region'),
+        'retention_days': capture_config.get('retention_days', 1095)
+    }
+
+
+# ============================================================================
+# JSON Helpers - Consistent JSON operations
+# ============================================================================
+
+def save_json(path: Path, data: dict, indent: int = 2):
+    """Save JSON data to file.
+    
+    Args:
+        path: Path to save JSON file
+        data: Dictionary to save
+        indent: Indentation level (default: 2)
+    """
+    import json
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=indent)
+
+
+def load_json(path: Path) -> dict:
+    """Load JSON data from file.
+    
+    Args:
+        path: Path to JSON file
+        
+    Returns:
+        Loaded dictionary
+    """
+    import json
+    with open(path, 'r') as f:
+        return json.load(f)
+
+
+# ============================================================================
+# Path Helpers - Path manipulation utilities
+# ============================================================================
+
+def ensure_absolute_path(path: str, reference_file: str = None) -> str:
+    """Convert relative path to absolute path.
+    
+    Args:
+        path: Path to convert (may be relative or absolute)
+        reference_file: Reference file for relative path resolution
+                       (defaults to project root, 2 levels up from this file)
+    
+    Returns:
+        Absolute path as string
+    """
+    path_obj = Path(path)
+    if path_obj.is_absolute():
+        return str(path_obj)
+    
+    # Default to project root (2 levels up from src/common.py)
+    if reference_file is None:
+        project_root = Path(__file__).parent.parent
+    else:
+        project_root = Path(reference_file).parent
+    
+    return str(project_root / path_obj)
+
+
+# ============================================================================
+# Date/Time Helpers - Consistent date formatting
+# ============================================================================
+
+# Date format constants
+DATE_FORMAT = '%Y-%m-%d'
+TIMESTAMP_FORMAT = '%Y%m%d_%H%M%S'
+
+
+def format_date(dt: datetime) -> str:
+    """Format datetime as date string (YYYY-MM-DD).
+    
+    Args:
+        dt: Datetime object
+        
+    Returns:
+        Formatted date string
+    """
+    return dt.strftime(DATE_FORMAT)
+
+
+def format_timestamp(dt: datetime) -> str:
+    """Format datetime as timestamp string (YYYYMMDD_HHMMSS).
+    
+    Args:
+        dt: Datetime object
+        
+    Returns:
+        Formatted timestamp string
+    """
+    return dt.strftime(TIMESTAMP_FORMAT)
+
+
+def parse_date(date_str: str) -> datetime:
+    """Parse date string (YYYY-MM-DD) to datetime.
+    
+    Args:
+        date_str: Date string in YYYY-MM-DD format
+        
+    Returns:
+        Datetime object
+    """
+    return datetime.strptime(date_str, DATE_FORMAT)
+
+
+def parse_timestamp(timestamp_str: str) -> datetime:
+    """Parse timestamp string (YYYYMMDD_HHMMSS) to datetime.
+    
+    Args:
+        timestamp_str: Timestamp string in YYYYMMDD_HHMMSS format
+        
+    Returns:
+        Datetime object
+    """
+    return datetime.strptime(timestamp_str, TIMESTAMP_FORMAT)
+
+
+# ============================================================================
+# Frame/Annotation Helpers
+# ============================================================================
+
+def count_unannotated_frames(daily_dir: Path, json_suffix: str = '.json') -> int:
+    """Count frames without annotations in a directory.
+    
+    Args:
+        daily_dir: Directory containing frames
+        json_suffix: Suffix for JSON annotation files
+        
+    Returns:
+        Number of unannotated frames
+    """
+    if not daily_dir.exists():
+        return 0
+    
+    count = 0
+    for png_file in daily_dir.glob('*.png'):
+        json_file = png_file.with_suffix(json_suffix)
+        if not json_file.exists():
+            count += 1
+    return count
+
+
+def calculate_compensated_sleep(
+    base_interval: float,
+    pre_notify_seconds: int,
+    showed_pre_notification: bool
+) -> float:
+    """Calculate sleep interval compensated for pre-notification delay.
+    
+    Args:
+        base_interval: Base sleep interval in seconds
+        pre_notify_seconds: Pre-notification warning duration
+        showed_pre_notification: Whether pre-notification was shown
+        
+    Returns:
+        Compensated sleep duration in seconds
+    """
+    if not showed_pre_notification:
+        return base_interval
+    
+    # Account for pre_notify_seconds and 2 second notification disappear delay
+    return max(base_interval - pre_notify_seconds - 2, 0)
+
+
 # TODO: Implement optional pause/resume functionality
 # def is_paused(pause_file_path: str = None) -> bool:
 #     """Check if capture is paused by looking for pause flag file."""
