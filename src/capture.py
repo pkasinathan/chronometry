@@ -21,37 +21,82 @@ logger = logging.getLogger(__name__)
 
 
 def is_screen_locked() -> bool:
-    """Check if the macOS screen is locked."""
+    """Check if the macOS screen is locked or laptop lid is closed.
+    
+    Uses multiple detection methods for robustness:
+    1. Quartz CGSessionCopyCurrentDictionary (most reliable)
+    2. Console owner check (loginwindow = locked)
+    3. ScreenSaverEngine process check
+    4. Laptop lid state check (AppleClamshellState)
+    
+    Returns:
+        True if screen is locked or lid is closed, False otherwise
+    """
     try:
-        # Check if screen is locked using Python's Quartz framework
-        # First try using ioreg to check screensaver state
-        result = subprocess.run(
-            ['ioreg', '-n', 'IODisplayWrangler'],
-            capture_output=True,
-            text=True,
-            timeout=2
-        )
+        # Method 1: Use Python's Quartz to check session state (most reliable for screen lock)
+        try:
+            from Quartz import CGSessionCopyCurrentDictionary
+            session_dict = CGSessionCopyCurrentDictionary()
+            if session_dict:
+                # When locked, CGSSessionScreenIsLocked key is present and True
+                if session_dict.get("CGSSessionScreenIsLocked"):
+                    logger.debug("Screen locked detected via CGSession")
+                    return True
+        except ImportError:
+            logger.debug("Quartz framework not available, trying alternative methods")
+        except Exception as e:
+            logger.debug(f"CGSession check failed: {e}")
         
-        # If IOPowerManagement shows the display is off/sleeping, screen is likely locked
-        if 'IOPowerManagement' in result.stdout:
-            if '"CurrentPowerState"=0' in result.stdout or '"CurrentPowerState"=1' in result.stdout:
+        # Method 2: Check if loginwindow owns the console (indicates screen is locked)
+        try:
+            result = subprocess.run(
+                ['stat', '-f', '%Su', '/dev/console'],
+                capture_output=True,
+                text=True,
+                timeout=1
+            )
+            if result.returncode == 0:
+                console_owner = result.stdout.strip()
+                if console_owner == 'root':
+                    # When locked, console owner is root (loginwindow process)
+                    logger.debug("Screen locked detected via console owner")
+                    return True
+        except Exception as e:
+            logger.debug(f"Console owner check failed: {e}")
+        
+        # Method 3: Check if screensaver is running
+        try:
+            result = subprocess.run(
+                ['pgrep', '-x', 'ScreenSaverEngine'],
+                capture_output=True,
+                timeout=1
+            )
+            if result.returncode == 0:
+                logger.debug("Screen locked detected via ScreenSaverEngine")
                 return True
+        except Exception as e:
+            logger.debug(f"ScreenSaverEngine check failed: {e}")
         
-        # Alternative: Check if screensaver is running
-        screensaver_check = subprocess.run(
-            ['pgrep', '-x', 'ScreenSaverEngine'],
-            capture_output=True,
-            timeout=2
-        )
-        
-        if screensaver_check.returncode == 0:
-            return True
+        # Method 4: Check if laptop lid is closed (AppleClamshellState)
+        try:
+            result = subprocess.run(
+                ['ioreg', '-r', '-k', 'AppleClamshellState', '-d', '4'],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            if result.returncode == 0:
+                if '"AppleClamshellState" = Yes' in result.stdout:
+                    logger.debug("Laptop lid closed detected via AppleClamshellState")
+                    return True
+        except Exception as e:
+            logger.debug(f"Clamshell state check failed: {e}")
         
         return False
         
     except Exception as e:
         logger.debug(f"Screen lock detection failed: {e}")
-        # If we can't determine, assume screen is unlocked (fail safe for capturing)
+        # Fail-safe: assume unlocked to avoid blocking legitimate captures
         return False
 
 
