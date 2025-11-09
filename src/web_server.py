@@ -90,8 +90,10 @@ def get_config():
             'retention_days': config['capture']['retention_days']
         },
         'annotation': {
-            'batch_size': config['annotation']['batch_size'],
-            'prompt': config['annotation'].get('prompt', 'Summarize the type of task or activity shown in these images.')
+            'screenshot_analysis_batch_size': config['annotation'].get('screenshot_analysis_batch_size', 4),
+            'rewrite_screenshot_analysis_format_summary': config['annotation'].get('rewrite_screenshot_analysis_format_summary', False),
+            'rewrite_screenshot_analysis_prompt': config['annotation'].get('rewrite_screenshot_analysis_prompt', ''),
+            'screenshot_analysis_prompt': config['annotation'].get('screenshot_analysis_prompt', 'Summarize the type of task or activity shown in these images.')
         },
         'timeline': {
             'bucket_minutes': config['timeline']['bucket_minutes'],
@@ -112,7 +114,7 @@ def get_config():
 
 @app.route('/api/config', methods=['PUT'])
 def update_config():
-    """Update user configuration while preserving comments and formatting.
+    """Update user configuration using proper YAML serialization.
     
     Only updates user_config.yaml (user-editable settings).
     System configs cannot be modified via API.
@@ -132,11 +134,24 @@ def update_config():
             config_path = str(legacy_config_path)
             logger.warning("Updating legacy config.yaml (consider migrating to split configs)")
         
-        # Read the original file to preserve comments
-        with open(config_path, 'r') as f:
-            lines = f.readlines()
+        # Create backup before making changes
+        from datetime import datetime
+        import shutil
+        backup_dir = Path('config/backup')
+        backup_dir.mkdir(parents=True, exist_ok=True)
         
-        # Parse the YAML to get structure
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"user_config.{timestamp}.yaml"
+        backup_path = backup_dir / backup_filename
+        
+        try:
+            shutil.copy2(config_path, backup_path)
+            logger.info(f"Created backup: {backup_path}")
+        except Exception as e:
+            logger.warning(f"Failed to create backup: {e}")
+            # Continue anyway - backup failure shouldn't block updates
+        
+        # Parse the YAML to get current structure
         import yaml
         with open(config_path, 'r') as f:
             current_config = yaml.safe_load(f)
@@ -163,67 +178,25 @@ def update_config():
                 current_config['notifications'] = {}
             current_config['notifications'].update(updates['notifications'])
         
-        # Update only the values in the original file, preserving comments
-        import re
-        updated_lines = []
-        for line in lines:
-            updated_line = line
-            
-            # Update capture settings
-            if 'capture' in updates:
-                if re.match(r'^\s+capture_interval_seconds:', line):
-                    updated_line = re.sub(r':\s*\d+', f": {updates['capture'].get('capture_interval_seconds', current_config['capture'].get('capture_interval_seconds', 900))}", line)
-                elif re.match(r'^\s+monitor_index:', line):
-                    updated_line = re.sub(r':\s*\d+', f": {updates['capture'].get('monitor_index', current_config['capture']['monitor_index'])}", line)
-                elif re.match(r'^\s+retention_days:', line):
-                    updated_line = re.sub(r':\s*\d+', f": {updates['capture'].get('retention_days', current_config['capture']['retention_days'])}", line)
-            
-            # Update annotation settings
-            if 'annotation' in updates:
-                if re.match(r'^\s+batch_size:', line):
-                    updated_line = re.sub(r':\s*\d+', f": {updates['annotation'].get('batch_size', current_config['annotation']['batch_size'])}", line)
-                elif re.match(r'^\s+prompt:', line):
-                    value = updates['annotation'].get('prompt', current_config['annotation'].get('prompt', ''))
-                    # Escape quotes and handle multiline
-                    value_escaped = value.replace('"', '\\"')
-                    updated_line = f'  prompt: "{value_escaped}"\n'
-            
-            # Update timeline settings
-            if 'timeline' in updates:
-                if re.match(r'^\s+bucket_minutes:', line):
-                    updated_line = re.sub(r':\s*\d+', f": {updates['timeline'].get('bucket_minutes', current_config['timeline']['bucket_minutes'])}", line)
-                elif re.match(r'^\s+exclude_keywords:', line):
-                    keywords = updates['timeline'].get('exclude_keywords', current_config['timeline'].get('exclude_keywords', []))
-                    if keywords:
-                        keywords_str = ', '.join([f'"{k}"' for k in keywords])
-                        updated_line = f'  exclude_keywords: [{keywords_str}]\n'
-                    else:
-                        updated_line = '  exclude_keywords: []\n'
-            
-            # Update digest settings
-            if 'digest' in updates:
-                if re.match(r'^\s+interval_seconds:', line):
-                    updated_line = re.sub(r':\s*\d+', f": {updates['digest'].get('interval_seconds', current_config['digest']['interval_seconds'])}", line)
-                elif re.match(r'^\s+ncp_project_id:', line):
-                    value = updates['digest'].get('ncp_project_id', current_config['digest']['ncp_project_id'])
-                    updated_line = re.sub(r':\s*"?[\w-]+"?', f': "{value}"', line)
-            
-            # Update notification settings
-            if 'notifications' in updates:
-                if re.match(r'^\s+enabled:', line) and 'notifications:' in ''.join(lines[max(0, lines.index(line)-5):lines.index(line)]):
-                    updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('enabled', current_config.get('notifications', {}).get('enabled', True))).lower()}", line)
-                elif re.match(r'^\s+notify_before_capture:', line):
-                    updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('notify_before_capture', current_config.get('notifications', {}).get('notify_before_capture', True))).lower()}", line)
-                elif re.match(r'^\s+pre_capture_warning_seconds:', line):
-                    updated_line = re.sub(r':\s*\d+', f": {updates['notifications'].get('pre_capture_warning_seconds', current_config.get('notifications', {}).get('pre_capture_warning_seconds', 5))}", line)
-                elif re.match(r'^\s+pre_capture_sound:', line):
-                    updated_line = re.sub(r':\s*\w+', f": {str(updates['notifications'].get('pre_capture_sound', current_config.get('notifications', {}).get('pre_capture_sound', False))).lower()}", line)
-            
-            updated_lines.append(updated_line)
+        # Use proper YAML dumping with literal style for multiline strings
+        class literal_str(str): pass
+        def represent_literal(dumper, data):
+            if '\n' in data and len(data) > 80:
+                return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data)
         
-        # Save updated config with comments preserved
+        yaml.add_representer(literal_str, represent_literal)
+        
+        # Convert long strings to literal style
+        if 'annotation' in current_config:
+            if 'screenshot_analysis_prompt' in current_config['annotation']:
+                current_config['annotation']['screenshot_analysis_prompt'] = literal_str(current_config['annotation']['screenshot_analysis_prompt'])
+            if 'rewrite_screenshot_analysis_prompt' in current_config['annotation']:
+                current_config['annotation']['rewrite_screenshot_analysis_prompt'] = literal_str(current_config['annotation']['rewrite_screenshot_analysis_prompt'])
+        
+        # Write back with proper YAML formatting
         with open(config_path, 'w') as f:
-            f.writelines(updated_lines)
+            yaml.dump(current_config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
         
         # Reload config
         init_config()

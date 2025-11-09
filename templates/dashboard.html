@@ -735,6 +735,17 @@
             transition: all 0.2s;
         }
         
+        .settings-input[type="number"] {
+            width: auto;
+        }
+        
+        textarea.settings-input {
+            width: 100%;
+            max-width: none;
+            box-sizing: border-box;
+            display: block;
+        }
+        
         .settings-input:focus {
             outline: none;
             border-color: #E50914;
@@ -1305,22 +1316,43 @@
                             <div class="settings-container-body">
                                 <div class="settings-field">
                                     <label class="settings-label">Batch Size</label>
-                                    <input type="number" v-model.number="settings.annotation.batch_size" 
-                                           class="settings-input">
+                                    <input type="number" v-model.number="settings.annotation.screenshot_analysis_batch_size" 
+                                           class="settings-input" min="1" max="10">
                                     <div class="settings-hint">
-                                        Number of images to batch together for AI analysis<br>
-                                        Higher = more context but slower processing
+                                        Number of images to batch together for AI analysis (higher = more context but slower)
                                     </div>
                                 </div>
                                 
                                 <div class="settings-field">
-                                    <label class="settings-label">AI Prompt</label>
-                                    <textarea v-model="settings.annotation.prompt" 
+                                    <label class="settings-label">Screenshot Analysis Prompt</label>
+                                    <textarea v-model="settings.annotation.screenshot_analysis_prompt" 
                                               class="settings-input" 
-                                              rows="4"
-                                              style="resize: vertical; font-family: inherit;"></textarea>
+                                              rows="8"
+                                              style="resize: vertical; font-family: monospace; font-size: 12px; width: 100% !important; max-width: 100%; box-sizing: border-box; display: block;"></textarea>
                                     <div class="settings-hint">
-                                        Customize how AI analyzes your screenshots
+                                        Instructions for AI when analyzing screenshots from your work sessions
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                                    <label class="settings-label">
+                                        <input type="checkbox" v-model="settings.annotation.rewrite_screenshot_analysis_format_summary" 
+                                               style="margin-right: 8px; vertical-align: middle;">
+                                        <span style="font-weight: 600;">Post-Process with Copilot</span>
+                                    </label>
+                                    <div class="settings-hint">
+                                        Clean up and reformat annotation summaries for better readability (uses additional tokens tracked as 'annotation_format')
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-field" v-if="settings.annotation.rewrite_screenshot_analysis_format_summary" style="margin-left: 28px;">
+                                    <label class="settings-label">Post-Processing Prompt</label>
+                                    <textarea v-model="settings.annotation.rewrite_screenshot_analysis_prompt" 
+                                              class="settings-input" 
+                                              rows="8"
+                                              style="resize: vertical; font-family: monospace; font-size: 12px; width: 100% !important; max-width: 100%; box-sizing: border-box; display: block;"></textarea>
+                                    <div class="settings-hint">
+                                        Instructions for cleaning up and reformatting raw annotation summaries
                                     </div>
                                 </div>
                             </div>
@@ -1506,8 +1538,10 @@
                             retention_days: 1095
                         },
                         annotation: {
-                            batch_size: 4,
-                            prompt: 'Summarize the type of task or activity shown in these images using clear, work-related terms.'
+                            screenshot_analysis_batch_size: 4,
+                            rewrite_screenshot_analysis_format_summary: false,
+                            rewrite_screenshot_analysis_prompt: '',
+                            screenshot_analysis_prompt: 'Summarize the type of task or activity shown in these images using clear, work-related terms.'
                         },
                         timeline: {
                             bucket_minutes: 30,
@@ -1908,10 +1942,10 @@
                     }
                     
                     // Validate annotation settings
-                    if (!this.settings.annotation.batch_size || this.settings.annotation.batch_size <= 0) {
+                    if (!this.settings.annotation.screenshot_analysis_batch_size || this.settings.annotation.screenshot_analysis_batch_size <= 0) {
                         errors.push('Annotation Batch Size must be a positive number');
                     }
-                    if (!this.settings.annotation.prompt || this.settings.annotation.prompt.trim() === '') {
+                    if (!this.settings.annotation.screenshot_analysis_prompt || this.settings.annotation.screenshot_analysis_prompt.trim() === '') {
                         errors.push('AI Prompt cannot be empty');
                     }
                     

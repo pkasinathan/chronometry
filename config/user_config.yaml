@@ -1,55 +1,78 @@
-# Chronometry User Configuration
-# ================================
-# User-editable settings exposed in the UI Settings tab
-# Changes take effect after restart or clicking "Save Changes" in the dashboard
-
 capture:
-  # How often to capture screenshots (in seconds)
-  # Examples: 900 = 15 min, 600 = 10 min, 1800 = 30 min
   capture_interval_seconds: 900
-  
-  # Which monitor to capture (0=all monitors, 1=primary, 2=secondary, etc.)
   monitor_index: 1
-  
-  # Days to keep screenshots before auto-deletion
   retention_days: 1095
-
 annotation:
-  # Number of images to batch together for AI analysis
-  # Higher = more context but slower processing
-  batch_size: 4
-  
-  # Prompt for AI to use when analyzing screenshots
-  # Customize this to guide how your activities are described
-  prompt: "Summarize the type of task or activity shown in these images using clear, work-related terms. For example: Sending a Slack message in the #membership-de channel about a new feature. Another example: Editing the file xyz in Cursor IDE."
+  screenshot_analysis_batch_size: 6
+  screenshot_analysis_prompt: |
+    You are annotating MY OWN work activity from 1–6 screenshots captured within a short time window. Write what I’m actually doing and why — not what the UI looks like.
 
+    ✦ Voice & POV
+      - Write in first person (“I am …”), concise, professional.
+      - Prefer action + purpose: what I’m doing → why → expected outcome/next step.
+
+    ✦ Evidence to extract (from PR/IDE/terminal/docs/Slack/Jira/UIs)
+      - Repository, branch, PR/MR number & title, author, reviewers, status (open/draft/merged), target branch.
+      - Ticket/issue IDs (JIRA/Linear), code module/file/function names, tests, datasets, workflow names.
+      - Commands run, errors, CI status, environment (dev/test/prod), time ranges.
+      - From IDE/Cursor right panel: current task, instruction, diff summary, test results.
+      - From PR: what’s being changed and for what purpose (summarize in 1 short clause).
+
+    ✦ Classification (choose one): {coding, code review, debugging, data analysis, documentation, meeting, planning, ops/monitoring, admin}
+      - If meeting/video call is active, summarize meeting purpose/topic; no screen details.
+
+    ✦ Multi-frame rule
+      - Treat the most recent frame as primary. Use nearby frames only to firm up intent (e.g., commit → tests → PR).
+
+    ✦ Output format (keep it tight; no UI description)
+      **Title (12 words max): strong verb + object + purpose**
+        - Activity: 1–2 sentences in first person stating what/why/outcome.
+        - Artifacts: repo, branch, PR/issue IDs, files/modules (if visible).
+        - Status/Next: current status and the next concrete step.
+        - Category: {coding, code review, debugging, data analysis, documentation, meeting, planning, ops/monitoring, admin}
+        - Confidence: 0–100% (mark "inferred" where you had to infer)
+
+    ✦ Style constraints
+      - Do NOT describe layout, colors, or widget positions.
+      - Prefer “Reviewing PR #123 by Deepthi to add hourly digest; verifying unit tests pass before merge” over generic “GitHub PR page visible”.
+      - If author names (e.g., Deepthi, Prabhu) appear, include them. If unsure, say “(inferred)”.
+
+    If signal is insufficient: state the most likely work action + “(low confidence; limited context)”.
+  rewrite_screenshot_analysis_format_summary: true
+  rewrite_screenshot_analysis_prompt: |
+    You are formatting a work activity summary that may contain multiple distinct activities.
+
+    YOUR TASK:
+    1. Identify distinct activities (separated by blank lines or context shifts)
+    2. For EACH activity, format with a bold title followed by indented bullet points
+    3. Add proper markdown spacing (blank line between activities)
+    4. Keep all factual details (repo names, PR numbers, file paths, commits, etc.)
+    5. Remove any redundancy within each activity description
+    6. Ensure consistent first-person voice
+
+    OUTPUT FORMAT:
+    Each activity should follow this structure:
+    **Title (12 words max): strong verb + object + purpose**
+      - Activity: 1–2 sentences in first person stating what/why/outcome.
+      - Artifacts: repo, branch, PR/issue IDs, files/modules (if visible).
+      - Status/Next: current status and the next concrete step.
+      - Category: {coding, code review, debugging, data analysis, documentation, meeting, planning, ops/monitoring, admin}
+      - Confidence: 0–100% (mark inferred where you had to infer)
+
+    [blank line between activities]
+
+    Return ONLY the formatted content, no preamble or explanation.
 digest:
-  # How often to regenerate digest (in seconds)
-  # Examples: 3600 = 1 hour, 7200 = 2 hours, 1800 = 30 minutes
   interval_seconds: 3600
-  
-  # Your project ID for Copilot API
-  ncp_project_id: "pkasichronometry"
-
+  ncp_project_id: pkasichronometry
 timeline:
-  # Time window for grouping similar activities (minutes)
-  # Activities within this window are grouped together in the timeline
   bucket_minutes: 30
-  
-  # Keywords to exclude from timeline (case-insensitive)
-  # Example: ["youtube", "reddit", "twitter", "facebook"]
-  exclude_keywords: ["youtube", "reddit", "x.com"]
-
+  exclude_keywords:
+  - youtube
+  - reddit
+  - x.com
 notifications:
-  # Enable desktop notifications
   enabled: true
-  
-  # Show notification before each capture
   notify_before_capture: true
-  
-  # Seconds before each capture to show a warning banner (per-capture)
   pre_capture_warning_seconds: 5
-  
-  # Play sound on the per-capture pre-notification
   pre_capture_sound: true
-

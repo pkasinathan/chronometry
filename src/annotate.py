@@ -15,6 +15,7 @@ from common import (
     load_config, get_daily_dir, get_json_path, save_json, count_unannotated_frames,
     format_date
 )
+from token_usage import TokenUsageTracker
 
 # Configure logging
 logging.basicConfig(
@@ -149,6 +150,84 @@ def call_metatron_api_with_retry(images: List[Dict], config: dict, max_retries: 
             time.sleep(wait_time)
 
 
+def format_summary_with_copilot(raw_summary: str, config: dict, batch_size: int) -> tuple:
+    """Format and clean up annotation summary using Copilot API.
+    
+    Args:
+        raw_summary: The raw summary from Metatron API
+        config: Configuration dictionary
+        batch_size: Number of frames in the batch (for context logging)
+        
+    Returns:
+        Tuple of (formatted_summary, tokens_used)
+    """
+    # Import here to avoid circular dependency
+    from digest import call_copilot_api
+    
+    # Get formatting prompt from config
+    annotation_config = config['annotation']
+    format_prompt_template = annotation_config.get('rewrite_screenshot_analysis_prompt', '')
+    
+    # If no custom prompt in config, use default
+    if not format_prompt_template:
+        format_prompt_template = """You are formatting a work activity summary that may contain multiple distinct activities.
+
+YOUR TASK:
+1. Identify distinct activities (separated by blank lines or context shifts)
+2. For EACH activity, format with a bold title followed by indented bullet points
+3. Add proper markdown spacing (blank line between activities)
+4. Keep all factual details (repo names, PR numbers, file paths, commits, etc.)
+5. Remove any redundancy within each activity description
+6. Ensure consistent first-person voice
+
+OUTPUT FORMAT:
+Each activity should follow this structure:
+**Title (12 words max): strong verb + object + purpose**
+  - Activity: 1–2 sentences in first person stating what/why/outcome.
+  - Artifacts: repo, branch, PR/issue IDs, files/modules (if visible).
+  - Status/Next: current status and the next concrete step.
+  - Category: {coding, code review, debugging, data analysis, documentation, meeting, planning, ops/monitoring, admin}
+  - Confidence: 0–100% (mark "inferred" where you had to infer)
+
+[blank line between activities]
+
+Return ONLY the formatted content, no preamble or explanation."""
+    
+    # Build the full prompt with the raw summary
+    formatting_prompt = f"{format_prompt_template}\n\nRAW SUMMARY TO FORMAT:\n{raw_summary}"
+    
+    try:
+        logger.info("Formatting summary with Copilot API...")
+        result = call_copilot_api(
+            prompt=formatting_prompt,
+            config=config,
+            max_tokens=1000,
+            context=f"Formatting {batch_size} frame batch"
+        )
+        
+        formatted_summary = result.get('content', raw_summary)
+        tokens_used = result.get('tokens', 0)
+        
+        # Track token usage separately as 'annotation_format'
+        if tokens_used > 0:
+            tracker = TokenUsageTracker(config['root_dir'])
+            tracker.log_tokens(
+                api_type='annotation_format',
+                tokens=tokens_used,
+                prompt_tokens=result.get('prompt_tokens', 0),
+                completion_tokens=result.get('completion_tokens', 0),
+                context=f"Formatting {batch_size} frame batch"
+            )
+        
+        logger.info(f"Summary formatted successfully (used {tokens_used} tokens)")
+        return formatted_summary, tokens_used
+        
+    except Exception as e:
+        logger.error(f"Error formatting summary with Copilot: {e}")
+        logger.warning("Falling back to raw summary")
+        return raw_summary, 0
+
+
 def process_batch(image_paths: List[Path], config: dict):
     """Process a batch of images through the API with retry logic."""
     annotation_config = config['annotation']
@@ -177,6 +256,24 @@ def process_batch(image_paths: List[Path], config: dict):
         logger.info(f"Calling Metatron API with {len(images)} images...")
         result = call_metatron_api_with_retry(images, config)
         
+        # Get the raw summary
+        raw_summary = result.get("summary", "")
+        
+        # Optionally format the summary with Copilot
+        format_enabled = annotation_config.get('rewrite_screenshot_analysis_format_summary', False)
+        if format_enabled and raw_summary:
+            logger.info("Post-processing summary for better formatting...")
+            formatted_summary, tokens_used = format_summary_with_copilot(
+                raw_summary=raw_summary,
+                config=config,
+                batch_size=len(image_paths)
+            )
+            summary_to_save = formatted_summary
+        else:
+            if not format_enabled:
+                logger.info("Summary formatting disabled in config")
+            summary_to_save = raw_summary
+        
         # Save results
         # Assuming API returns a single summary for the batch
         # Save the same summary for each image in the batch
@@ -187,7 +284,7 @@ def process_batch(image_paths: List[Path], config: dict):
             json_data = {
                 "timestamp": image_path.stem,
                 "image_file": image_path.name,
-                "summary": result.get("summary", ""),
+                "summary": summary_to_save,
                 "sources": result.get("sources", []),
                 "batch_size": len(image_paths)
             }
@@ -211,7 +308,7 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
     """
     root_dir = config['root_dir']
     annotation_config = config['annotation']
-    batch_size = annotation_config.get('batch_size', 1)
+    batch_size = annotation_config.get('screenshot_analysis_batch_size', 1)
     json_suffix = annotation_config.get('json_suffix', '.json')
     
     # Get directory for the date
